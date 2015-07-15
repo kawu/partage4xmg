@@ -10,11 +10,17 @@ module NLP.FrenchTAG.Gram where
 
 import           Control.Applicative ((<$>))
 import           Control.Monad (msum, (<=<))
+import           Control.Monad.State.Strict as St
+import           Control.Monad.Trans.Class (lift)
+import           Control.Monad.IO.Class (liftIO)
 
 import qualified Data.Tree           as R
 import qualified Data.Map.Strict     as M
 import qualified Data.Set            as S
 import qualified Data.Text.Lazy.IO   as L
+import qualified Pipes               as Pipes
+import qualified Pipes.Prelude       as Pipes
+import           Pipes               (for, (>->))
 
 import qualified NLP.FeatureStructure.Tree as FT
 
@@ -105,13 +111,10 @@ mkFS m = FT.FN Nothing $ FT.Subs $ M.fromList
 -- a tree doesn't provide an Ord instance!
 -- mkLTAG :: [P.Tree] -> S.Set Rule
 -- mkLTAG :: [P.Tree] -> [Rule]
-mkLTAG
-    -- = S.fromList
-    = map LE.compile . snd
-    -- = snd
-    . LR.runRM . mapM_ getRules
-    . map mkSomeTree -- . S.toList
+mkLTAG ts =
+    ruleProd >-> Pipes.map LE.compile
   where
+    ruleProd = sequence_ $ map (getRules . mkSomeTree) ts
     getRules (Left t) = LR.treeRules True t
     getRules (Right a) = LR.auxRules True a
 
@@ -119,12 +122,17 @@ mkLTAG
 -- | Parse the stand-alone French TAG xml file.
 -- readGrammar :: FilePath -> IO (S.Set Rule)
 -- readGrammar :: FilePath -> IO [Rule]
-readGrammar path = mkLTAG . P.parseGrammar <$> L.readFile path
+readGrammar path = do
+    ts <- liftIO $ P.parseGrammar <$> L.readFile path
+    mkLTAG ts
 
 
 printGrammar :: FilePath -> IO ()
-printGrammar =
+printGrammar path =
   -- let printRule x = LR.printRuleFS x >> L.putStrLn ""
   let printRule x = LE.printRuleFS x >> L.putStrLn ""
   -- in  mapM_ printRule . S.toList <=< readGrammar
-  in  mapM_ printRule <=< readGrammar
+  -- in  mapM_ printRule <=< readGrammar
+  in  LR.runRM $ for
+        (readGrammar path)
+        (liftIO . printRule)

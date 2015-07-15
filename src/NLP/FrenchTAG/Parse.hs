@@ -181,4 +181,4 @@ readGrammar path = parseGrammar <$> L.readFile path
 printGrammar :: FilePath -> IO ()
 printGrammar =
   let printTree = putStrLn . R.drawTree . fmap show
-  in mapM_ printTree <=< readGrammar
+  in  mapM_ printTree <=< readGrammar

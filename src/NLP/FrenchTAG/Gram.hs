@@ -1,4 +1,5 @@
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 
 -- A provisional module responsible for LTAG grammar creation.
@@ -96,16 +97,18 @@ mkFS m = FT.FN Nothing $ FT.Subs $ M.fromList
 -- * identifier     = internal LTAG identifier
 -- * attribute      = either attribute or input variable name
 -- * value          = value
-type Rule = LE.Rule P.Sym P.Sym LE.ID (Either P.Attr P.Var) P.Val
+-- type Rule = LE.Rule P.Sym P.Sym LE.ID (Either P.Attr P.Var) P.Val
 
 
 -- | Make an LTAG grammar given a set of trees.
 -- TODO: We would like the function to work on an input set but
 -- a tree doesn't provide an Ord instance!
-mkLTAG :: [P.Tree] -> S.Set Rule
+-- mkLTAG :: [P.Tree] -> S.Set Rule
+-- mkLTAG :: [P.Tree] -> [Rule]
 mkLTAG
-    = S.fromList
-    . map LE.compile . snd
+    -- = S.fromList
+    = map LE.compile . snd
+    -- = snd
     . LR.runRM . mapM_ getRules
     . map mkSomeTree -- . S.toList
   where
@@ -114,11 +117,14 @@ mkLTAG
 
 
 -- | Parse the stand-alone French TAG xml file.
-readGrammar :: FilePath -> IO (S.Set Rule)
+-- readGrammar :: FilePath -> IO (S.Set Rule)
+-- readGrammar :: FilePath -> IO [Rule]
 readGrammar path = mkLTAG . P.parseGrammar <$> L.readFile path
 
 
 printGrammar :: FilePath -> IO ()
 printGrammar =
-  let printRule = LE.printRuleFS
-  in mapM_ printRule . S.toList <=< readGrammar
+  -- let printRule x = LR.printRuleFS x >> L.putStrLn ""
+  let printRule x = LE.printRuleFS x >> L.putStrLn ""
+  -- in  mapM_ printRule . S.toList <=< readGrammar
+  in  mapM_ printRule <=< readGrammar

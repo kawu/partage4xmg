@@ -10,7 +10,7 @@ module NLP.FrenchTAG.Gram where
 
 import           Control.Applicative ((<$>))
 import           Control.Monad (msum, (<=<))
-import           Control.Monad.State.Strict as St
+import           Control.Monad.State.Strict as E
 import           Control.Monad.Trans.Class (lift)
 import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.Morph (generalize)
@@ -134,11 +134,10 @@ readGrammar path = do
 
 
 printGrammar :: FilePath -> IO ()
-printGrammar path =
-  -- let printRule x = LR.printRuleFS x >> L.putStrLn ""
-  let printRule x = LE.printRuleFS x >> L.putStrLn ""
-  -- in  mapM_ printRule . S.toList <=< readGrammar
-  -- in  mapM_ printRule <=< readGrammar
-  in  void $ LE.runDupT $ LR.runRM $ for
+printGrammar path = do
+    let printRule x = LE.printRuleFS x >> L.putStrLn ""
+    gram <- fmap snd $ LE.runDupT $ LR.runRM $ for
         (readGrammar path)
-        (liftIO . printRule)
+        -- (liftIO . printRule)
+        (liftIO . Pipes.discard)
+    void $ LE.earley gram ["jean", "dort"]

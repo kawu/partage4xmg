@@ -13,6 +13,7 @@ import           Control.Monad (msum, (<=<))
 import           Control.Monad.State.Strict as St
 import           Control.Monad.Trans.Class (lift)
 import           Control.Monad.IO.Class (liftIO)
+import           Control.Monad.Morph (generalize)
 
 import qualified Data.Tree           as R
 import qualified Data.Map.Strict     as M
@@ -20,7 +21,7 @@ import qualified Data.Set            as S
 import qualified Data.Text.Lazy.IO   as L
 import qualified Pipes               as Pipes
 import qualified Pipes.Prelude       as Pipes
-import           Pipes               (for, (>->))
+import           Pipes               (for, (>->), hoist)
 
 import qualified NLP.FeatureStructure.Tree as FT
 
@@ -103,16 +104,21 @@ mkFS m = FT.FN Nothing $ FT.Subs $ M.fromList
 -- * identifier     = internal LTAG identifier
 -- * attribute      = either attribute or input variable name
 -- * value          = value
--- type Rule = LE.Rule P.Sym P.Sym LE.ID (Either P.Attr P.Var) P.Val
+type Rule = LE.Rule P.Sym P.Sym LE.ID (LR.Feat P.Attr) P.Val
 
 
 -- | Make an LTAG grammar given a set of trees.
 -- TODO: We would like the function to work on an input set but
 -- a tree doesn't provide an Ord instance!
 -- mkLTAG :: [P.Tree] -> S.Set Rule
--- mkLTAG :: [P.Tree] -> [Rule]
-mkLTAG ts =
-    ruleProd >-> Pipes.map LE.compile
+-- mkLTAG :: Monad m => [P.Tree] -> Pipes.Producer Rule (StateT Int (StateT DupS)) m
+
+-- mkLTAG ts =
+--     ruleProd >-> Pipes.map LE.compile
+mkLTAG ts = hoist (hoist (hoist generalize))
+    (   hoist (hoist lift) ruleProd
+    >-> Pipes.map LE.compile
+    >-> hoist lift LE.rmDups )
   where
     ruleProd = sequence_ $ map (getRules . mkSomeTree) ts
     getRules (Left t) = LR.treeRules True t
@@ -133,6 +139,6 @@ printGrammar path =
   let printRule x = LE.printRuleFS x >> L.putStrLn ""
   -- in  mapM_ printRule . S.toList <=< readGrammar
   -- in  mapM_ printRule <=< readGrammar
-  in  LR.runRM $ for
+  in  void $ LE.runDupT $ LR.runRM $ for
         (readGrammar path)
         (liftIO . printRule)

@@ -202,8 +202,8 @@ shareEdges path = do
     ruleSet <- shareRuleSet path
     putStr "\nTotal number of 'edges': "
     print . sum . map (length.mkWord) $ S.toList ruleSet
-    putStr "Total number of 'nodes': "
-    print . sum . map ((+1) . length.mkWord) $ S.toList ruleSet
+    putStr "Total number of 'states': "
+    print . (+2) . sum . map ((\n->n-1) . length.mkWord) $ S.toList ruleSet
 
 
 -------------------------------------------------

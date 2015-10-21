@@ -22,7 +22,7 @@ import qualified Text.HTML.TagSoup   as TagSoup
 import           Text.XML.PolySoup   hiding (P, Q)
 import qualified Text.XML.PolySoup   as PolySoup
 
-import           NLP.LTAG.Core    (View(..))
+import           NLP.TAG.Vanilla.Core    (View(..))
 
 
 -- import           NLP.FrenchTAG.Tree

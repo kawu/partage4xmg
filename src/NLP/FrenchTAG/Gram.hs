@@ -141,3 +141,4 @@ printGrammar path = do
         -- (liftIO . printRule)
         (liftIO . Pipes.discard)
     void $ LE.earley gram ["jean", "dort"]
+--     return ()

@@ -16,6 +16,7 @@ import           Control.Monad.Trans.Class (lift)
 import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.Morph (generalize)
 
+import           Data.Maybe (fromJust)
 import qualified Data.Tree           as R
 import qualified Data.Map.Strict     as M
 import qualified Data.Set            as S
@@ -23,6 +24,8 @@ import qualified Data.Text.Lazy.IO   as L
 import qualified Pipes               as Pipes
 import qualified Pipes.Prelude       as Pipes
 import           Pipes               (for, (>->), hoist)
+import qualified Control.Monad.Atom  as Atom
+import qualified Data.DAWG.Static    as DAWG
 
 import qualified NLP.TAG.Vanilla.Tree as LT
 import qualified NLP.TAG.Vanilla.Rule as LR
@@ -172,13 +175,102 @@ shareMkTAG ts = hoist (hoist (hoist generalize))
     >-> hoist lift LE.rmDups )
 
 
--- | Calculate the number of rules in the factorized grammar:
--- removing duplicates.
-shareRuleNum :: FilePath -> IO ()
-shareRuleNum path = do
+-- | Print rules in the factorized grammar.
+shareRuleSet :: FilePath -> IO (S.Set Rule)
+shareRuleSet path = do
     ts <- S.toList <$> getTrees path
-    n <- LE.runDupT $ LR.runRM $ Pipes.length $ shareMkTAG ts
-    print n
+    fmap snd $ LE.runDupT $ LR.runRM $ Pipes.runEffect $
+        for (shareMkTAG ts) (const $ return ())
+
+
+
+-- | Print rules in the factorized grammar.
+shareRules :: FilePath -> IO ()
+shareRules path = do
+    ruleSet <- shareRuleSet path
+    forM_ (S.toList ruleSet) $ \rule -> do
+        LR.printRule rule >> putStrLn ""
+--     ts <- S.toList <$> getTrees path
+--     void $ LE.runDupT $ LR.runRM $ Pipes.runEffect $
+--         for (shareMkTAG ts) $ \rule -> do
+--             liftIO $ LR.printRule rule >> putStrLn ""
+
+
+-- | Print rules in the factorized grammar.
+shareEdges :: FilePath -> IO ()
+shareEdges path = do
+    ruleSet <- shareRuleSet path
+    putStr "\nTotal number of 'edges': "
+    print . sum . map (length.mkWord) $ S.toList ruleSet
+    putStr "Total number of 'nodes': "
+    print . sum . map ((+1) . length.mkWord) $ S.toList ruleSet
+
+
+-------------------------------------------------
+-- Substructure Sharing + Automaton
+-------------------------------------------------
+
+
+-- | A label.
+type Lab = LR.Lab P.Sym P.Sym
+
+
+-- | Build a sequence from a rule.
+mkWord :: Rule -> [Lab]
+mkWord LR.Rule{..} = bodyR ++ [headR] 
+
+
+-- | Reverse the map assuming that each key gets a unique int.
+revMap :: Ord a => M.Map a Int -> M.Map Int a
+revMap m = M.fromList [(v, k) | (k, v) <- M.toList m]
+
+
+-- | Convert the set of rules to a set of rules with ints
+-- representing individual labels.
+convGram :: S.Set Rule -> (S.Set [Int], M.Map Int Lab)
+convGram ruleSet =
+    ( ruleSet'
+    , revMap (Atom.mapping tab) )
+  where
+    (ruleSet', tab) = flip Atom.runAtom Atom.empty $ do
+        rules <- forM (S.toList ruleSet) $ \rule -> do
+            let xs = mkWord rule
+            mapM Atom.toAtom xs
+        return $ S.fromList rules
+
+
+-- | Build the automaton from the rules.
+automatRules :: FilePath -> IO ()
+automatRules path = do
+    ruleSet0 <- shareRuleSet path
+    let (ruleSet, labMap) = convGram ruleSet0
+        dawg = DAWG.fromLang (S.toList ruleSet)
+    traverse labMap dawg
+    putStrLn ""
+    putStr "Number of states: " >> print (DAWG.numStates dawg)
+    putStr "Number of edges: "  >> print (DAWG.numEdges dawg)
+   
+
+-- | Traverse and print the automaton.
+traverse :: M.Map Int Lab => DAWG.DAWG Int () () -> IO ()
+traverse labMap dawg =
+    flip E.evalStateT S.empty $ doit (getID dawg)
+  where
+    getID = DAWG.rootID
+    doit i = do
+        b <- E.gets $ S.member i
+        when (not b) $ do
+            lift . putStrLn $ "[Node " ++ show i ++ "]"
+            E.modify $ S.insert i
+            let dg = fromJust $ DAWG.byID i dawg
+                edges = DAWG.edges dg
+            forM_ edges $ \(x, end) -> do
+                lift . putStrLn $
+                    "  " ++ LR.viewLab (labMap M.! x) ++
+                    " => " ++ show (getID end)
+            forM_ edges $ \(_, end) ->
+                doit (getID end)
+            
 
 
 -------------------------------------------------

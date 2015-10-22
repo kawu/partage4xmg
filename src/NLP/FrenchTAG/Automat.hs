@@ -154,12 +154,31 @@ baseLineRules path = do
             liftIO $ LR.printRule rule >> putStrLn ""
 
 
+-- | Print rules in the factorized grammar.
+baseLineRuleSet :: FilePath -> IO (S.Set Rule)
+baseLineRuleSet path = do
+    ts <- S.toList <$> getTrees path
+    flip E.execStateT S.empty $ LR.runRM $ Pipes.runEffect $
+        for (baseLineMkTAG ts) $ \rule -> do
+            lift . lift $ E.modify $ S.insert rule
+
+
 -- | Calculate the number of rules in the factorized grammar.
 baseLineRuleNum :: FilePath -> IO ()
 baseLineRuleNum path = do
     ts <- S.toList <$> getTrees path
     n <- LR.runRM $ Pipes.length $ baseLineMkTAG ts
     print n
+
+
+-- | Print rules in the factorized grammar.
+baseLineEdges :: FilePath -> IO ()
+baseLineEdges path = do
+    ruleSet <- baseLineRuleSet path
+    putStr "\nTotal number of 'edges': "
+    print . sum . map (length.mkWord) $ S.toList ruleSet
+    putStr "Total number of 'states': "
+    print . (+2) . sum . map ((\n->n-1) . length.mkWord) $ S.toList ruleSet
 
 
 -------------------------------------------------

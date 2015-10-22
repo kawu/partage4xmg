@@ -226,6 +226,23 @@ shareEdges path = do
 
 
 -------------------------------------------------
+-- Baseline + Automaton
+-------------------------------------------------
+
+
+-- | Build the automaton from the rules.
+baseAutomatRules :: FilePath -> IO ()
+baseAutomatRules path = do
+    ruleSet0 <- baseLineRuleSet path
+    let (ruleSet, labMap) = convGram ruleSet0
+        dawg = DAWG.fromLang (S.toList ruleSet)
+    traverse labMap dawg
+    putStrLn ""
+    putStr "Number of states: " >> print (DAWG.numStates dawg)
+    putStr "Number of edges: "  >> print (DAWG.numEdges dawg)
+
+
+-------------------------------------------------
 -- Substructure Sharing + Automaton
 -------------------------------------------------
 
@@ -268,6 +285,11 @@ automatRules path = do
     putStrLn ""
     putStr "Number of states: " >> print (DAWG.numStates dawg)
     putStr "Number of edges: "  >> print (DAWG.numEdges dawg)
+
+
+-------------------------------------------------
+-- Automaton Traversal
+-------------------------------------------------
    
 
 -- | Traverse and print the automaton.

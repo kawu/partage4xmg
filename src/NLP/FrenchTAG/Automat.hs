@@ -30,6 +30,7 @@ import qualified Data.DAWG.Static    as DAWG
 import qualified NLP.TAG.Vanilla.Tree as LT
 import qualified NLP.TAG.Vanilla.Rule as LR
 import qualified NLP.TAG.Vanilla.Earley as LE
+import qualified NLP.TAG.Vanilla.SubtreeSharing as LS
 
 import qualified NLP.FrenchTAG.Parse as P
 
@@ -108,7 +109,7 @@ type RM m = LR.RM P.Sym P.Sym m
 
 -- | Duplication-removal monad.
 -- type DupT n t m = E.StateT (DupS n t) m
-type DupM m = LE.DupT P.Sym P.Sym m
+type DupM m = LS.DupT P.Sym P.Sym m
 
 
 ---------------------------------------------------------------
@@ -191,14 +192,14 @@ baseLineEdges path = do
 shareMkTAG :: Monad m => [SomeTree] -> RM (DupM m) ()
 shareMkTAG ts = hoist (hoist (hoist generalize))
     (   hoist (hoist lift) (baseLineMkTAG ts)
-    >-> hoist lift LE.rmDups )
+    >-> hoist lift LS.rmDups )
 
 
 -- | Print rules in the factorized grammar.
 shareRuleSet :: FilePath -> IO (S.Set Rule)
 shareRuleSet path = do
     ts <- S.toList <$> getTrees path
-    fmap snd $ LE.runDupT $ LR.runRM $ Pipes.runEffect $
+    fmap snd $ LS.runDupT $ LR.runRM $ Pipes.runEffect $
         for (shareMkTAG ts) (const $ return ())
 
 

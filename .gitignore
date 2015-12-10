@@ -15,4 +15,4 @@ cabal.sandbox.config
 *.aux
 *.hp
 report
-FrenchTAG
+data

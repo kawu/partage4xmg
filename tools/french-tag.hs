@@ -51,14 +51,14 @@ parseBuildOptions s = return $ case (map C.toLower) s of
 
 buildOptions :: Parser Command
 buildOptions = Build
-    <$> option
+    <$> argument
             -- auto
             ( str >>= parseBuildOptions )
             ( metavar "BUILD-TYPE"
            <> value AutoShare
-           <> help "Possible values: base, share, autob(ase), auto(share)"
-           <> long "build-type"
-           <> short 'b' )
+           <> help "Possible values: base, share, autob(ase), auto(share)" )
+--            <> long "build-type"
+--            <> short 'b' )
 
 
 --------------------------------------------------
@@ -76,10 +76,12 @@ opts = Options
     <*> subparser
         ( command "build"
             (info buildOptions
-                (progDesc "Build different automaton versions"))
+                (progDesc "Build different automaton versions")
+                )
         <> command "parse"
             (info (pure Parse)
-                (progDesc "Parse the input grammar file"))
+                (progDesc "Parse the input grammar file")
+                )
         )
 
 

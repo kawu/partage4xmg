@@ -1,0 +1,46 @@
+name:               french-tag
+version:            0.1
+synopsis:           Experiments with FrenchTAG
+description:
+    TODO
+license:            BSD3
+license-file:       LICENSE
+cabal-version:      >= 1.6
+copyright:          Copyright (c) 2015 Jakub Waszczuk
+author:             Jakub Waszczuk
+maintainer:         waszczuk.kuba@gmail.com
+stability:          experimental
+category:           Natural Language Processing
+homepage:           https://github.com/kawu/french-tag
+build-type:         Simple
+
+
+library
+    hs-source-dirs: src
+    build-depends:
+        base                >= 4        && < 5
+      , tag-vanilla         >= 0.1      && < 0.2
+      , polysoup            >= 0.6      && < 0.7
+      , tagsoup             >= 0.13     && < 0.14
+      , containers          >= 0.4      && < 0.6
+      , text                >= 1.2      && < 1.3
+      , dawg-ord            >= 0.1      && < 0.2
+      , mtl                 >= 2.1      && < 2.3
+
+    exposed-modules:
+        NLP.FrenchTAG.Parse
+      , NLP.FrenchTAG.Automat
+
+    ghc-options: -Wall
+
+source-repository head
+    type: git
+    location: https://github.com/kawu/tag-vanilla.git
+
+
+executable french-tag
+    build-depends:
+        optparse-applicative    >= 0.12     && < 0.13
+    hs-source-dirs: tools, src
+    main-is: french-tag.hs
+    ghc-options: -Wall -O2 -threaded -rtsopts

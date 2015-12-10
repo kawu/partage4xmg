@@ -9,7 +9,7 @@ main :: IO ()
 main = do
     [path]  <- getArgs
     treeSet <- getTrees path
-    forM_ (S.toList treeSet) $ \tree -> do                                                   
+    forM_ (S.toList treeSet) $ \tree -> do
         putStrLn $ showSomeTree tree
     putStr "The number of trees in the grammar: "
     print $ S.size treeSet

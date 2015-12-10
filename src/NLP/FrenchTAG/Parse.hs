@@ -12,7 +12,7 @@ import           Control.Applicative ((*>), (<$>), (<*>),
 import           Control.Monad ((<=<))
 
 import qualified Data.Foldable       as F
-import qualified Data.Text           as T
+-- import qualified Data.Text           as T
 import qualified Data.Text.Lazy      as L
 import qualified Data.Text.Lazy.IO   as L
 import qualified Data.Tree           as R
@@ -64,7 +64,7 @@ type AVM = M.Map Attr (Either Val Var)
 
 -- | Non-terminal/node type.
 data Type
-    = Std 
+    = Std
     | Foot
     | Anchor
     | Lex
@@ -118,12 +118,12 @@ nodeQ = (named "node" *> attr "type") `join` ( \typTxt -> R.Node
 
 -- | Non-terminal parser.
 nonTermQ :: L.Text -> Q NonTerm
-nonTermQ typ = joinR (named "narg") $
+nonTermQ typ' = joinR (named "narg") $
     first $ joinR (named "fs") $ do
-        sym <- first symQ
-        top <- optional $ first $ avmQ "top"
-        bot <- optional $ first $ avmQ "bot"
-        return $ NonTerm (parseTyp typ) sym top bot
+        sym' <- first symQ
+        top' <- optional $ first $ avmQ "top"
+        bot' <- optional $ first $ avmQ "bot"
+        return $ NonTerm (parseTyp typ') sym' top' bot'
 
 
 -- | Syntagmatic value parser.
@@ -134,7 +134,7 @@ symQ = joinR (named "f" *> hasAttrVal "name" "cat") $
 
 -- | AVM parser.
 avmQ :: L.Text -> Q AVM
-avmQ name = joinR (named "f" *> hasAttrVal "name" name) $
+avmQ name' = joinR (named "f" *> hasAttrVal "name" name') $
     first $ joinR (named "fs") $
         M.fromList <$> every attrValQ
 

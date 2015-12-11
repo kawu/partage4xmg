@@ -8,6 +8,7 @@ import qualified Data.Char as C
 
 import qualified NLP.FrenchTAG.Automat as A
 import qualified NLP.FrenchTAG.Parse as P
+import qualified NLP.FrenchTAG.Gen as G
 
 
 --------------------------------------------------
@@ -23,7 +24,11 @@ data Options = Options {
 
 data Command
     = Build BuildOptions
+    -- ^ Build an automaton
     | Parse -- ParseOptions
+    -- ^ Only parse and show the input grammar
+    | Gen Int
+    -- ^ Generate size-bounded derived trees
 
 
 --------------------------------------------------
@@ -41,7 +46,7 @@ data BuildOptions
 
 -- parseBuildOptions :: Monad m => String -> m BuildOptions
 parseBuildOptions :: Monad m => String -> m BuildOptions
-parseBuildOptions s = return $ case (map C.toLower) s of
+parseBuildOptions s = return $ case map C.toLower s of
     'b':_       -> Base
     's':_       -> Share
     'a':'u':'t':'o':'b':_
@@ -59,6 +64,21 @@ buildOptions = Build
            <> help "Possible values: base, share, autob(ase), auto(share)" )
 --            <> long "build-type"
 --            <> short 'b' )
+
+
+--------------------------------------------------
+-- Generation options
+--------------------------------------------------
+
+
+genOptions :: Parser Command
+genOptions = Gen
+    <$> option
+            auto
+            ( metavar "MAX-SIZE"
+           <> value 5
+           <> long "max-size"
+           <> short 'm' )
 
 
 --------------------------------------------------
@@ -82,11 +102,16 @@ opts = Options
             (info (pure Parse)
                 (progDesc "Parse the input grammar file")
                 )
+        <> command "gen"
+            (info genOptions
+                (progDesc "Parse the input grammar file")
+                )
         )
 
 
+-- | Run program depending on the cmdline arguments.
 run :: Options -> IO ()
-run Options{..} = do
+run Options{..} =
     case cmd of
          Build Base ->
             A.baseLineRules input
@@ -98,6 +123,8 @@ run Options{..} = do
             A.automatRules input
          Parse ->
             P.printGrammar input
+         Gen k ->
+            G.generateFrom input k
 
 
 main :: IO ()

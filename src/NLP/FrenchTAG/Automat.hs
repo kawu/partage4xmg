@@ -10,8 +10,8 @@ module NLP.FrenchTAG.Automat where
 
 
 import           Control.Applicative ((<$>))
-import           Control.Monad (msum, (<=<))
-import           Control.Monad.State.Strict as E
+import           Control.Monad (msum)
+import qualified Control.Monad.State.Strict as E
 -- import           Control.Monad.Trans.Class (lift)
 -- import           Control.Monad.IO.Class (liftIO)
 -- import           Control.Monad.Morph (generalize)
@@ -150,7 +150,7 @@ showSomeTree (Right aux) = LT.showTree' (LT.auxTree aux)
 getTrees :: FilePath -> IO (S.Set SomeTree)
 getTrees path = do
     ts <- P.parseGrammar <$> L.readFile path
-    flip E.execStateT S.empty $ forM_ ts $ \tree -> do
+    flip E.execStateT S.empty $ E.forM_ ts $ \tree -> do
         let tree' = mkSomeTree tree
         -- Rather nasty trick, but works.  Otherwise the tree is
         -- not constructed at this precise momend.  Find a better
@@ -178,7 +178,7 @@ getTrees path = do
 baseLineRules :: FilePath -> IO ()
 baseLineRules path = do
     ruleSet <- baseLineRuleSet path
-    forM_ (S.toList ruleSet) $ \rule -> do
+    E.forM_ (S.toList ruleSet) $ \rule -> do
         LR.printRule rule >> putStrLn ""
 
 
@@ -234,7 +234,7 @@ shareRuleSet path = do
 shareRules :: FilePath -> IO ()
 shareRules path = do
     ruleSet <- shareRuleSet path
-    forM_ (S.toList ruleSet) $ \rule -> do
+    E.forM_ (S.toList ruleSet) $ \rule -> do
         LR.printRule rule >> putStrLn ""
 
 

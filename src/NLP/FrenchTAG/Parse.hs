@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 
 -- Parsing French TAG generated from an FrenchTAG XMG metagrammar.

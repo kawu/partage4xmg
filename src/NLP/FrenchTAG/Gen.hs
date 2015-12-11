@@ -17,6 +17,7 @@ module NLP.FrenchTAG.Gen
 
 -- * Generation
 , generateFrom
+, GenConf (..)
 
 -- * Experiments
 , genAndParseFrom
@@ -24,7 +25,9 @@ module NLP.FrenchTAG.Gen
 
 
 import           Control.Applicative ((<$>))
+import           Control.Monad (foldM)
 import qualified Control.Monad.State.Strict as E
+-- import           Control.Monad.Morph (hoist)
 
 import           Pipes
 import qualified Pipes.Prelude as Pipes
@@ -117,13 +120,24 @@ getTrees path = do
 -------------------------------------------------
 
 
+-- | Generation configuration.
+data GenConf = GenConf {
+      maxSize   :: Int
+    -- ^ Maximal size of a tree
+    , probTres  :: Double
+    -- ^ Probability threshold
+    , genRepeat :: Int
+    -- ^ Repeat number of times
+    } deriving (Show, Eq, Ord)
+
+
 -- | Generate size-bounded derived trees based on
 -- the grammar under the path.
 -- Only final trees are shown.
-generateFrom :: FilePath -> Int -> Double -> IO ()
-generateFrom path k p0 = do
+generateFrom :: FilePath -> GenConf -> IO ()
+generateFrom path GenConf{..} = do
     gram <- getTrees path
-    let pipe = generate gram k p0
+    let pipe = generate gram maxSize probTres
     runEffect . for pipe $ \tree ->
         lift . putStrLn . R.drawTree . fmap show $ tree
 
@@ -136,8 +150,8 @@ generateFrom path k p0 = do
 -- | Generate size-bounded derived trees based on
 -- the grammar under the path.
 -- Only final trees are shown.
-genAndParseFrom :: FilePath -> Int -> Double -> IO ()
-genAndParseFrom path k p0 = do
+genAndParseFrom :: FilePath -> GenConf -> IO ()
+genAndParseFrom path GenConf{..} = do
     -- extract the grammar
     gram <- getTrees path
 
@@ -146,16 +160,26 @@ genAndParseFrom path k p0 = do
     let auto = LA.buildAuto ruleSet
 
     -- sentence generation pipe
-    let pipe = generate gram k p0
+    let pipe = generate gram maxSize probTres
             >-> Pipes.filter O.final
             >-> Pipes.map O.proj
-            >-> rmDups
+    let runPipe = flip E.execStateT S.empty
+                . runEffect
+                . for (hoist lift pipe >-> rmDups)
+        merge = flip foldM S.empty $ \x my ->
+            S.union x <$> my
 
-    runEffect . for pipe $ \sent ->
-        lift $ do
-            print sent
-            print =<< LP.recognizeAuto auto sent
-            putStrLn ""
+    sentSet <- merge . replicate genRepeat . runPipe $ \sent ->
+        liftIO $ print sent
+--         liftIO $ do
+--             print sent
+--             canParse <- LP.recognizeAuto auto sent
+--             putStr "#=> " >> print canParse >> putStrLn ""
+
+    putStrLn ""
+    putStrLn "### FINAL RESULTS ###"
+    putStrLn ""
+    mapM_ print $ S.toList sentSet
 
 
 -------------------------------------------------
@@ -164,13 +188,23 @@ genAndParseFrom path k p0 = do
 
 
 -- | Duplication removal pipe.
-rmDups :: (Monad m, Ord a) => Pipe a a m ()
-rmDups =
-    E.evalStateT pipe S.empty
-  where
-    pipe = E.forever $ do
-        x <- lift await
-        isMember <- S.member x <$> E.get
-        E.unless isMember $ do
-            lift (yield x)
-            E.modify (S.insert x)
+rmDups :: (Monad m, Ord a) => Pipe a a (E.StateT (S.Set a) m) r
+rmDups = E.forever $ do
+    x <- await
+    isMember <- S.member x <$> lift E.get
+    E.unless isMember $ do
+        yield x
+        lift . E.modify . S.insert $ x
+
+
+-- -- | Duplication removal pipe.
+-- rmDups :: (Monad m, Ord a) => Pipe a a m (S.Set a)
+-- rmDups =
+--     E.execStateT pipe S.empty
+--   where
+--     pipe = E.forever $ do
+--         x <- lift await
+--         isMember <- S.member x <$> E.get
+--         E.unless isMember $ do
+--             lift (yield x)
+--             E.modify (S.insert x)

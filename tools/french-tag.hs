@@ -29,6 +29,8 @@ data Command
     -- ^ Only parse and show the input grammar
     | Gen Int
     -- ^ Generate size-bounded derived trees
+    | GenParse Int
+    -- ^ Generate and parse size-bounded derived trees
 
 
 --------------------------------------------------
@@ -82,6 +84,21 @@ genOptions = Gen
 
 
 --------------------------------------------------
+-- Generation/parsing options
+--------------------------------------------------
+
+
+genParseOptions :: Parser Command
+genParseOptions = GenParse
+    <$> option
+            auto
+            ( metavar "MAX-SIZE"
+           <> value 5
+           <> long "max-size"
+           <> short 'm' )
+
+
+--------------------------------------------------
 -- Global options
 --------------------------------------------------
 
@@ -104,7 +121,11 @@ opts = Options
                 )
         <> command "gen"
             (info genOptions
-                (progDesc "Parse the input grammar file")
+                (progDesc "Generate trees based on input grammar file")
+                )
+        <> command "gen-parse"
+            (info genParseOptions
+                (progDesc "Generate and parse trees")
                 )
         )
 
@@ -125,6 +146,8 @@ run Options{..} =
             P.printGrammar input
          Gen k ->
             G.generateFrom input k
+         GenParse k ->
+            G.genAndParseFrom input k
 
 
 main :: IO ()

@@ -17,19 +17,27 @@ module NLP.FrenchTAG.Gen
 
 -- * Generation
 , generateFrom
+
+-- * Experiments
+, genAndParseFrom
 ) where
 
 
--- import           Control.Applicative ((<$>))
+import           Control.Applicative ((<$>))
 import qualified Control.Monad.State.Strict as E
 
 import           Pipes
+import qualified Pipes.Prelude as Pipes
 import qualified Data.Tree as R
 import qualified Data.Text.Lazy      as L
 import qualified Data.Set as S
 
+import           NLP.TAG.Vanilla.Core (View(..))
 import qualified NLP.TAG.Vanilla.Tree.Other as O
 import           NLP.TAG.Vanilla.Gen (generate)
+import qualified NLP.TAG.Vanilla.SubtreeSharing as LS
+import qualified NLP.TAG.Vanilla.Automaton as LA
+import qualified NLP.TAG.Vanilla.Earley.Auto as LP
 
 import qualified NLP.FrenchTAG.Parse as P
 
@@ -46,7 +54,8 @@ data Term
     = Term L.Text
     | Anchor L.Text
     deriving (Show, Eq, Ord)
-
+instance View Term where
+    view = show
 
 -- | Non-terminal is just as in the original grammar.
 type NonTerm = L.Text
@@ -86,7 +95,7 @@ convert (R.Node P.NonTerm{..} xs) =
 
 
 -------------------------------------------------
--- Generation
+-- Grammar extraction
 -------------------------------------------------
 
 
@@ -103,10 +112,64 @@ getTrees path = do
             E.modify (S.insert tree')
 
 
+-------------------------------------------------
+-- Generation
+-------------------------------------------------
+
+
 -- | Generate size-bounded derived trees based on
 -- the grammar under the path.
+-- Only final trees are shown.
 generateFrom :: FilePath -> Int -> IO ()
 generateFrom path k = do
     gram <- getTrees path
-    runEffect $ for (generate gram k) $ \tree ->
-        lift $ putStrLn . R.drawTree . fmap show $ tree
+    let pipe = generate gram k
+    runEffect . for pipe $ \tree ->
+        lift . putStrLn . R.drawTree . fmap show $ tree
+
+
+-------------------------------------------------
+-- Parsing experiments
+-------------------------------------------------
+
+
+-- | Generate size-bounded derived trees based on
+-- the grammar under the path.
+-- Only final trees are shown.
+genAndParseFrom :: FilePath -> Int -> IO ()
+genAndParseFrom path k = do
+    -- extract the grammar
+    gram <- getTrees path
+
+    -- build the automaton
+    ruleSet <- LS.compile . map O.decode . S.toList $ gram
+    let auto = LA.buildAuto ruleSet
+
+    -- sentence generation pipe
+    let pipe = generate gram k
+            >-> Pipes.filter O.final
+            >-> Pipes.map O.proj
+            >-> rmDups
+
+    runEffect . for pipe $ \sent ->
+        lift $ do
+            print sent
+            print =<< LP.recognizeAuto auto sent
+            putStrLn ""
+
+
+-------------------------------------------------
+-- Utils
+-------------------------------------------------
+
+
+-- | Duplication removal pipe.
+rmDups :: (Monad m, Ord a) => Pipe a a m ()
+rmDups =
+    E.evalStateT pipe S.empty
+  where
+    pipe = E.forever $ do
+        x <- lift await
+        isMember <- S.member x <$> E.get
+        E.unless isMember $
+          lift (yield x)

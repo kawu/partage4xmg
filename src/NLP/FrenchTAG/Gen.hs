@@ -120,10 +120,10 @@ getTrees path = do
 -- | Generate size-bounded derived trees based on
 -- the grammar under the path.
 -- Only final trees are shown.
-generateFrom :: FilePath -> Int -> IO ()
-generateFrom path k = do
+generateFrom :: FilePath -> Int -> Double -> IO ()
+generateFrom path k p0 = do
     gram <- getTrees path
-    let pipe = generate gram k
+    let pipe = generate gram k p0
     runEffect . for pipe $ \tree ->
         lift . putStrLn . R.drawTree . fmap show $ tree
 
@@ -136,8 +136,8 @@ generateFrom path k = do
 -- | Generate size-bounded derived trees based on
 -- the grammar under the path.
 -- Only final trees are shown.
-genAndParseFrom :: FilePath -> Int -> IO ()
-genAndParseFrom path k = do
+genAndParseFrom :: FilePath -> Int -> Double -> IO ()
+genAndParseFrom path k p0 = do
     -- extract the grammar
     gram <- getTrees path
 
@@ -146,7 +146,7 @@ genAndParseFrom path k = do
     let auto = LA.buildAuto ruleSet
 
     -- sentence generation pipe
-    let pipe = generate gram k
+    let pipe = generate gram k p0
             >-> Pipes.filter O.final
             >-> Pipes.map O.proj
             >-> rmDups
@@ -171,5 +171,6 @@ rmDups =
     pipe = E.forever $ do
         x <- lift await
         isMember <- S.member x <$> E.get
-        E.unless isMember $
-          lift (yield x)
+        E.unless isMember $ do
+            lift (yield x)
+            E.modify (S.insert x)

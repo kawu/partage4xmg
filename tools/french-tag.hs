@@ -27,9 +27,9 @@ data Command
     -- ^ Build an automaton
     | Parse -- ParseOptions
     -- ^ Only parse and show the input grammar
-    | Gen Int
+    | Gen Int Double
     -- ^ Generate size-bounded derived trees
-    | GenParse Int
+    | GenParse Int Double
     -- ^ Generate and parse size-bounded derived trees
 
 
@@ -81,6 +81,12 @@ genOptions = Gen
            <> value 5
            <> long "max-size"
            <> short 'm' )
+    <*> option
+            auto
+            ( metavar "PROB-RETAIN"
+           <> value 1
+           <> long "prob-retain"
+           <> short 'p' )
 
 
 --------------------------------------------------
@@ -96,6 +102,12 @@ genParseOptions = GenParse
            <> value 5
            <> long "max-size"
            <> short 'm' )
+    <*> option
+            auto
+            ( metavar "PROB-RETAIN"
+           <> value 1
+           <> long "prob-retain"
+           <> short 'p' )
 
 
 --------------------------------------------------
@@ -144,10 +156,10 @@ run Options{..} =
             A.automatRules input
          Parse ->
             P.printGrammar input
-         Gen k ->
-            G.generateFrom input k
-         GenParse k ->
-            G.genAndParseFrom input k
+         Gen k p0 ->
+            G.generateFrom input k p0
+         GenParse k p0 ->
+            G.genAndParseFrom input k p0
 
 
 main :: IO ()

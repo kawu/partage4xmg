@@ -87,7 +87,7 @@ genOptions = fmap Gen $ G.GenConf
            <> value 1
            <> long "prob-retain"
            <> short 'p' )
-    <*> pure 1
+--     <*> pure 1
 
 
 --------------------------------------------------
@@ -109,12 +109,12 @@ genParseOptions = fmap GenParse $ G.GenConf
            <> value 1
            <> long "prob-retain"
            <> short 'p' )
-    <*> option
-            auto
-            ( metavar "REPEAT"
-           <> value 1
-           <> long "repeat"
-           <> short 'r' )
+--     <*> option
+--             auto
+--             ( metavar "REPEAT"
+--            <> value 1
+--            <> long "repeat"
+--            <> short 'r' )
 
 
 --------------------------------------------------

@@ -126,8 +126,6 @@ data GenConf = GenConf {
     -- ^ Maximal size of a tree
     , probTres  :: Double
     -- ^ Probability threshold
-    , genRepeat :: Int
-    -- ^ Repeat number of times
     } deriving (Show, Eq, Ord)
 
 
@@ -163,23 +161,22 @@ genAndParseFrom path GenConf{..} = do
     let pipe = generate gram maxSize probTres
             >-> Pipes.filter O.final
             >-> Pipes.map O.proj
-    let runPipe = flip E.execStateT S.empty
-                . runEffect
-                . for (hoist lift pipe >-> rmDups)
-        merge = flip foldM S.empty $ \x my ->
-            S.union x <$> my
+--     let runPipe = flip E.execStateT S.empty
+--                 . runEffect
+--                 . for (hoist lift pipe >-> rmDups)
+    let runPipe = runEffect . for (pipe >-> rmDups)
+--         merge = flip foldM S.empty $ \x my ->
+--             S.union x <$> my
 
-    sentSet <- merge . replicate genRepeat . runPipe $ \sent ->
-        liftIO $ print sent
---         liftIO $ do
+    runPipe $ liftIO . print
 --             print sent
 --             canParse <- LP.recognizeAuto auto sent
 --             putStr "#=> " >> print canParse >> putStrLn ""
 
-    putStrLn ""
-    putStrLn "### FINAL RESULTS ###"
-    putStrLn ""
-    mapM_ print $ S.toList sentSet
+--     putStrLn ""
+--     putStrLn "### FINAL RESULTS ###"
+--     putStrLn ""
+--     mapM_ print $ S.toList sentSet
 
 
 -------------------------------------------------
@@ -187,24 +184,24 @@ genAndParseFrom path GenConf{..} = do
 -------------------------------------------------
 
 
--- | Duplication removal pipe.
-rmDups :: (Monad m, Ord a) => Pipe a a (E.StateT (S.Set a) m) r
-rmDups = E.forever $ do
-    x <- await
-    isMember <- S.member x <$> lift E.get
-    E.unless isMember $ do
-        yield x
-        lift . E.modify . S.insert $ x
-
-
 -- -- | Duplication removal pipe.
--- rmDups :: (Monad m, Ord a) => Pipe a a m (S.Set a)
--- rmDups =
---     E.execStateT pipe S.empty
---   where
---     pipe = E.forever $ do
---         x <- lift await
---         isMember <- S.member x <$> E.get
---         E.unless isMember $ do
---             lift (yield x)
---             E.modify (S.insert x)
+-- rmDups :: (Monad m, Ord a) => Pipe a a (E.StateT (S.Set a) m) r
+-- rmDups = E.forever $ do
+--     x <- await
+--     isMember <- S.member x <$> lift E.get
+--     E.unless isMember $ do
+--         yield x
+--         lift . E.modify . S.insert $ x
+
+
+-- | Duplication removal pipe.
+rmDups :: (Monad m, Ord a) => Pipe a a m ()
+rmDups =
+    E.evalStateT pipe S.empty
+  where
+    pipe = E.forever $ do
+        x <- lift await
+        isMember <- S.member x <$> E.get
+        E.unless isMember $ do
+            lift (yield x)
+            E.modify (S.insert x)

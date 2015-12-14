@@ -9,6 +9,7 @@ import qualified Data.Char as C
 import qualified NLP.FrenchTAG.Automat as A
 import qualified NLP.FrenchTAG.Parse as P
 import qualified NLP.FrenchTAG.Gen as G
+import qualified NLP.FrenchTAG.Stats as S
 
 
 --------------------------------------------------
@@ -31,6 +32,8 @@ data Command
     -- ^ Generate size-bounded derived trees
     | GenParse G.GenConf
     -- ^ Generate and parse size-bounded derived trees
+    | Stats
+    -- ^ Parse sentences from stdin (one sentence per line)
 
 
 --------------------------------------------------
@@ -146,6 +149,10 @@ opts = Options
             (info genParseOptions
                 (progDesc "Generate and parse trees")
                 )
+        <> command "stats"
+            (info (pure Stats)
+                (progDesc "Parse sentences from stdin")
+                )
         )
 
 
@@ -167,6 +174,8 @@ run Options{..} =
             G.generateFrom input cfg
          GenParse cfg ->
             G.genAndParseFrom input cfg
+         Stats ->
+            S.statsOn input
 
 
 main :: IO ()

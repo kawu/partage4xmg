@@ -21,11 +21,14 @@ module NLP.FrenchTAG.Gen
 
 -- * Experiments
 , genAndParseFrom
+
+-- * Utils
+, getTrees
 ) where
 
 
 import           Control.Applicative ((<$>))
-import           Control.Monad (foldM)
+-- import           Control.Monad (foldM)
 import qualified Control.Monad.State.Strict as E
 -- import           Control.Monad.Morph (hoist)
 
@@ -38,9 +41,9 @@ import qualified Data.Set as S
 import           NLP.TAG.Vanilla.Core (View(..))
 import qualified NLP.TAG.Vanilla.Tree.Other as O
 import           NLP.TAG.Vanilla.Gen (generate)
-import qualified NLP.TAG.Vanilla.SubtreeSharing as LS
-import qualified NLP.TAG.Vanilla.Automaton as LA
-import qualified NLP.TAG.Vanilla.Earley.Auto as LP
+-- import qualified NLP.TAG.Vanilla.SubtreeSharing as LS
+-- import qualified NLP.TAG.Vanilla.Automaton as LA
+-- import qualified NLP.TAG.Vanilla.Earley.Auto as LP
 
 import qualified NLP.FrenchTAG.Parse as P
 
@@ -56,7 +59,7 @@ import qualified NLP.FrenchTAG.Parse as P
 data Term
     = Term L.Text
     | Anchor L.Text
-    deriving (Show, Eq, Ord)
+    deriving (Show, Read, Eq, Ord)
 instance View Term where
     view = show
 
@@ -153,9 +156,9 @@ genAndParseFrom path GenConf{..} = do
     -- extract the grammar
     gram <- getTrees path
 
-    -- build the automaton
-    ruleSet <- LS.compile . map O.decode . S.toList $ gram
-    let auto = LA.buildAuto ruleSet
+--     -- build the automaton
+--     ruleSet <- LS.compile . map O.decode . S.toList $ gram
+--     let auto = LA.buildAuto ruleSet
 
     -- sentence generation pipe
     let pipe = generate gram maxSize probTres

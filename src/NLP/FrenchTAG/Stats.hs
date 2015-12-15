@@ -24,8 +24,9 @@ import qualified NLP.TAG.Vanilla.Tree.Other as O
 import qualified NLP.TAG.Vanilla.Rule as Rule
 import qualified NLP.TAG.Vanilla.SubtreeSharing as LS
 import qualified NLP.TAG.Vanilla.Automaton as LA
-import qualified NLP.TAG.Vanilla.Earley.AutoAP as LPA
-import qualified NLP.TAG.Vanilla.Earley.TreeGen as LPG
+import qualified NLP.TAG.Vanilla.Earley.Auto as Auto
+import qualified NLP.TAG.Vanilla.Earley.AutoAP as AutoAP
+import qualified NLP.TAG.Vanilla.Earley.TreeGen as TreeGen
 
 import qualified NLP.FrenchTAG.Gen as G
 
@@ -50,6 +51,8 @@ data StatCfg = StatCfg
 data ParseMethod
     = AutoAP
     -- ^ Automaton with active/passive distinction
+    | Auto
+    -- ^ Automaton with no active/passive distinction
     | TreeGen
     -- ^ Version with prefix sharing
     deriving (Show, Read, Eq, Ord)
@@ -127,6 +130,7 @@ statsOn StatCfg{..} gramPath = do
                 putStr . show $ sent
                 case howParse of
                     AutoAP  -> parseAutoAP auto sent
+                    Auto    -> parseAuto auto sent
                     TreeGen -> parseTreeGen ruleSet sent
             liftIO $ putStr " => " >> print stat
             E.modify $ M.insertWith addStat
@@ -146,21 +150,28 @@ statsOn StatCfg{..} gramPath = do
 
     -- | Parse with AutoAP version.
     parseAutoAP auto sent = do
-        earSt <- LPA.earleyAuto auto sent
-        unless (LPA.isRecognized sent earSt)
+        earSt <- AutoAP.earleyAuto auto sent
+        unless (AutoAP.isRecognized sent earSt)
             $ error "parseAutoAP: didn't recognize the sentence!"
         return
-            ( LPA.hyperNodesNum earSt
-            , LPA.hyperEdgesNum earSt )
+            ( AutoAP.hyperNodesNum earSt
+            , AutoAP.hyperEdgesNum earSt )
 
+    -- | Parse with Auto version.
+    parseAuto auto sent = do
+        earSt <- Auto.earleyAuto auto sent
+        unless (Auto.isRecognized earSt sent)
+            $ error "parseAuto: didn't recognize the sentence!"
+        return
+            ( Auto.hyperNodesNum earSt
+            , Auto.hyperEdgesNum earSt )
 
     -- | Parse with TreeGen version.
     parseTreeGen ruleSet sent = do
-        earSt <- LPG.earley ruleSet sent
+        earSt <- TreeGen.earley ruleSet sent
         return
-            ( LPG.hyperNodesNum earSt
-            , LPG.hyperEdgesNum earSt )
-
+            ( TreeGen.hyperNodesNum earSt
+            , TreeGen.hyperEdgesNum earSt )
 
 
 --         -- results for base version

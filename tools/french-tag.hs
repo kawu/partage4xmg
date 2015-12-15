@@ -121,7 +121,9 @@ genParseOptions = fmap GenParse $ G.GenConf
 -- parseBuildOptions :: Monad m => String -> m BuildOptions
 parseParseMethod :: Monad m => String -> m S.ParseMethod
 parseParseMethod s = return $ case map C.toLower s of
-    't':_       -> S.TreeGen
+    'b':_       -> S.TreeGen    -- BASE
+    'a':_       -> S.Auto       -- AUTOMATON
+    'o':_       -> S.AutoAP     -- OPTIMAL
     _           -> S.AutoAP
 
 

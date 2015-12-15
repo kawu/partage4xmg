@@ -28,7 +28,7 @@ data Command
     -- ^ Build an automaton
     | Parse -- ParseOptions
     -- ^ Only parse and show the input grammar
-    | Gen G.GenConf
+    | Gen Int
     -- ^ Generate size-bounded derived trees
     | GenParse G.GenConf
     -- ^ Generate and parse size-bounded derived trees
@@ -77,20 +77,13 @@ buildOptions = Build
 
 
 genOptions :: Parser Command
-genOptions = fmap Gen $ G.GenConf
+genOptions = Gen
     <$> option
             auto
             ( metavar "MAX-SIZE"
            <> value 5
            <> long "max-size"
            <> short 'm' )
-    <*> option
-            auto
-            ( metavar "PROB-RETAIN"
-           <> value 1
-           <> long "prob-retain"
-           <> short 'p' )
---     <*> pure 1
 
 
 --------------------------------------------------
@@ -108,16 +101,16 @@ genParseOptions = fmap GenParse $ G.GenConf
            <> short 'm' )
     <*> option
             auto
-            ( metavar "PROB-RETAIN"
-           <> value 1
-           <> long "prob-retain"
-           <> short 'p' )
---     <*> option
---             auto
---             ( metavar "REPEAT"
---            <> value 1
---            <> long "repeat"
---            <> short 'r' )
+            ( metavar "ADJOIN-PROB"
+           <> value 0.1
+           <> long "adjoin-prob"
+           <> short 'a' )
+    <*> option
+            auto
+            ( metavar "TREE-NUM"
+           <> value 10
+           <> long "tree-num"
+           <> short 'n' )
 
 
 --------------------------------------------------
@@ -170,8 +163,8 @@ run Options{..} =
             A.automatRules input
          Parse ->
             P.printGrammar input
-         Gen cfg ->
-            G.generateFrom input cfg
+         Gen sizeMax ->
+            G.generateFrom input sizeMax
          GenParse cfg ->
             G.genAndParseFrom input cfg
          Stats ->

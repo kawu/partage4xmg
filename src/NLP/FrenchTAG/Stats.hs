@@ -52,7 +52,7 @@ statsOn gramPath = do
 
         -- results for automaton
         autoEarSt <- LPA.earleyAuto auto sent
-        putStr $ " (AUTO: "
+        putStr $ " # (AUTO: "
         putStr $ show (LPA.isRecognized  autoEarSt sent) ++ ", "
         putStr $ show (LPA.hyperNodesNum autoEarSt) ++ ", "
         putStr $ show (LPA.hyperEdgesNum autoEarSt) ++ ") "

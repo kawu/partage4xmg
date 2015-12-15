@@ -40,7 +40,7 @@ import qualified Data.Set as S
 
 import           NLP.TAG.Vanilla.Core (View(..))
 import qualified NLP.TAG.Vanilla.Tree.Other as O
-import           NLP.TAG.Vanilla.Gen (generate)
+import qualified NLP.TAG.Vanilla.Gen as G
 -- import qualified NLP.TAG.Vanilla.SubtreeSharing as LS
 -- import qualified NLP.TAG.Vanilla.Automaton as LA
 -- import qualified NLP.TAG.Vanilla.Earley.Auto as LP
@@ -127,20 +127,28 @@ getTrees path = do
 data GenConf = GenConf {
       maxSize   :: Int
     -- ^ Maximal size of a tree
-    , probTres  :: Double
-    -- ^ Probability threshold
+    , adjProb   :: Double
+    -- ^ Adjunction probability
+    , treeNum   :: Int
+    -- ^ Number of trees to generate
     } deriving (Show, Eq, Ord)
 
 
 -- | Generate size-bounded derived trees based on
 -- the grammar under the path.
 -- Only final trees are shown.
-generateFrom :: FilePath -> GenConf -> IO ()
-generateFrom path GenConf{..} = do
+generateFrom :: FilePath -> Int -> IO ()
+generateFrom path sizeMax = do
     gram <- getTrees path
-    let pipe = generate gram maxSize probTres
-    runEffect . for pipe $ \tree ->
-        lift . putStrLn . R.drawTree . fmap show $ tree
+    let pipe = G.generateAll gram sizeMax
+           >-> Pipes.filter O.isFinal
+           >-> Pipes.map O.proj
+    runEffect . for pipe $ liftIO . print
+--     let pipe = G.generateRand gram $ G.GenConf
+--             { genAllSize = maxSize
+--             , adjProb    = adjProb }
+--     runEffect . for (pipe >-> Pipes.take treeNum) $ \tree ->
+--         lift . putStrLn . R.drawTree . fmap show $ tree
 
 
 -------------------------------------------------
@@ -155,31 +163,17 @@ genAndParseFrom :: FilePath -> GenConf -> IO ()
 genAndParseFrom path GenConf{..} = do
     -- extract the grammar
     gram <- getTrees path
-
---     -- build the automaton
---     ruleSet <- LS.compile . map O.decode . S.toList $ gram
---     let auto = LA.buildAuto ruleSet
-
     -- sentence generation pipe
-    let pipe = generate gram maxSize probTres
-            >-> Pipes.filter O.final
+    let conf = G.GenConf
+            { genAllSize = maxSize
+            , adjProb    = adjProb }
+        pipe = G.generateRand gram conf
+            >-> Pipes.filter O.isFinal
             >-> Pipes.map O.proj
---     let runPipe = flip E.execStateT S.empty
---                 . runEffect
---                 . for (hoist lift pipe >-> rmDups)
-    let runPipe = runEffect . for (pipe >-> rmDups)
---         merge = flip foldM S.empty $ \x my ->
---             S.union x <$> my
-
+    -- print (conf, treeNum)
+    let runPipe = runEffect . for
+            (pipe >-> Pipes.take treeNum >-> rmDups)
     runPipe $ liftIO . print
---             print sent
---             canParse <- LP.recognizeAuto auto sent
---             putStr "#=> " >> print canParse >> putStrLn ""
-
---     putStrLn ""
---     putStrLn "### FINAL RESULTS ###"
---     putStrLn ""
---     mapM_ print $ S.toList sentSet
 
 
 -------------------------------------------------

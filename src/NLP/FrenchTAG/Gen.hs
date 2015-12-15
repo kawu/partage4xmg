@@ -159,8 +159,8 @@ generateFrom path sizeMax = do
 -- | Generate size-bounded derived trees based on
 -- the grammar under the path.
 -- Only final trees are shown.
-genAndParseFrom :: FilePath -> GenConf -> IO ()
-genAndParseFrom path GenConf{..} = do
+genAndParseFrom :: GenConf -> FilePath -> IO ()
+genAndParseFrom GenConf{..} path = do
     -- extract the grammar
     gram <- getTrees path
     -- sentence generation pipe

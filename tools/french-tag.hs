@@ -32,7 +32,7 @@ data Command
     -- ^ Generate size-bounded derived trees
     | GenParse G.GenConf
     -- ^ Generate and parse size-bounded derived trees
-    | Stats
+    | Stats S.StatCfg
     -- ^ Parse sentences from stdin (one sentence per line)
 
 
@@ -114,6 +114,37 @@ genParseOptions = fmap GenParse $ G.GenConf
 
 
 --------------------------------------------------
+-- Stats options
+--------------------------------------------------
+
+
+-- parseBuildOptions :: Monad m => String -> m BuildOptions
+parseParseMethod :: Monad m => String -> m S.ParseMethod
+parseParseMethod s = return $ case map C.toLower s of
+    't':_       -> S.TreeGen
+    _           -> S.AutoAP
+
+
+statsOptions :: Parser Command
+statsOptions = fmap Stats $ S.StatCfg
+    <$> option
+            auto
+            ( metavar "MAX-SIZE"
+           <> value Nothing
+           <> long "max-size"
+           <> short 'm' )
+    <*> (not <$> switch
+            ( long "no-subtree-sharing"
+           <> short 'n' ))
+    <*> option
+            ( str >>= parseParseMethod )
+            ( metavar "PARSE-METHOD"
+           <> value S.AutoAP
+           <> long "parse-method"
+           <> short 'p' )
+
+
+--------------------------------------------------
 -- Global options
 --------------------------------------------------
 
@@ -143,7 +174,7 @@ opts = Options
                 (progDesc "Generate and parse trees")
                 )
         <> command "stats"
-            (info (pure Stats)
+            (info statsOptions
                 (progDesc "Parse sentences from stdin")
                 )
         )
@@ -166,9 +197,9 @@ run Options{..} =
          Gen sizeMax ->
             G.generateFrom input sizeMax
          GenParse cfg ->
-            G.genAndParseFrom input cfg
-         Stats ->
-            S.statsOn input
+            G.genAndParseFrom cfg input
+         Stats cfg ->
+            S.statsOn cfg input
 
 
 main :: IO ()

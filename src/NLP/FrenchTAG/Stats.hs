@@ -108,8 +108,8 @@ addStat x y = Stat
 --------------------------------------------------
 
 
--- | Read the grammar from the input file, sentences to parse from std input,
--- and perform the experiment.
+-- | Read the grammar from the input file, sentences to parse from
+-- std input, and perform the experiment.
 statsOn :: StatCfg -> FilePath -> IO ()
 statsOn StatCfg{..} gramPath = do
     -- extract the grammar

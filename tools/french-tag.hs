@@ -7,6 +7,7 @@ import qualified Data.Char as C
 
 
 import qualified NLP.FrenchTAG.Automat as A
+import qualified NLP.FrenchTAG.Build as B
 import qualified NLP.FrenchTAG.Parse as P
 import qualified NLP.FrenchTAG.Gen as G
 import qualified NLP.FrenchTAG.Stats as S
@@ -24,7 +25,7 @@ data Options = Options {
 
 
 data Command
-    = Build BuildOptions
+    = Build -- BuildOptions
     -- ^ Build an automaton
     | Parse -- ParseOptions
     -- ^ Only parse and show the input grammar
@@ -41,34 +42,34 @@ data Command
 --------------------------------------------------
 
 
-data BuildOptions
-    = Base
-    | Share
-    | AutoBase
-    | AutoShare
-    deriving (Show, Read)
-
-
+-- data BuildOptions
+--     = Base
+--     | Share
+--     | AutoBase
+--     | AutoShare
+--     deriving (Show, Read)
+-- 
+-- 
+-- -- parseBuildOptions :: Monad m => String -> m BuildOptions
 -- parseBuildOptions :: Monad m => String -> m BuildOptions
-parseBuildOptions :: Monad m => String -> m BuildOptions
-parseBuildOptions s = return $ case map C.toLower s of
-    'b':_       -> Base
-    's':_       -> Share
-    'a':'u':'t':'o':'b':_
-                -> AutoBase
-    _           -> AutoShare
-
-
-buildOptions :: Parser Command
-buildOptions = Build
-    <$> argument
-            -- auto
-            ( str >>= parseBuildOptions )
-            ( metavar "BUILD-TYPE"
-           <> value AutoShare
-           <> help "Possible values: base, share, autob(ase), auto(share)" )
---            <> long "build-type"
---            <> short 'b' )
+-- parseBuildOptions s = return $ case map C.toLower s of
+--     'b':_       -> Base
+--     's':_       -> Share
+--     'a':'u':'t':'o':'b':_
+--                 -> AutoBase
+--     _           -> AutoShare
+-- 
+-- 
+-- buildOptions :: Parser Command
+-- buildOptions = Build
+--     <$> argument
+--             -- auto
+--             ( str >>= parseBuildOptions )
+--             ( metavar "BUILD-TYPE"
+--            <> value AutoShare
+--            <> help "Possible values: base, share, autob(ase), auto(share)" )
+-- --            <> long "build-type"
+-- --            <> short 'b' )
 
 
 --------------------------------------------------
@@ -160,8 +161,8 @@ opts = Options
       <> help "Input .xml (e.g. valuation.xml) file" )
     <*> subparser
         ( command "build"
-            (info buildOptions
-                (progDesc "Build different automaton versions")
+            (info (pure Build) -- buildOptions
+                (progDesc "Build automaton from the grammar")
                 )
         <> command "parse"
             (info (pure Parse)
@@ -186,14 +187,16 @@ opts = Options
 run :: Options -> IO ()
 run Options{..} =
     case cmd of
-         Build Base ->
-            A.baseLineRules input
-         Build Share ->
-            A.shareRules input
-         Build AutoBase ->
-            A.baseAutomatRules input
-         Build AutoShare ->
-            A.automatRules input
+--          Build Base ->
+--             A.baseLineRules input
+--          Build Share ->
+--             A.shareRules input
+--          Build AutoBase ->
+--             A.baseAutomatRules input
+--          Build AutoShare ->
+--             A.automatRules input
+         Build ->
+            B.buildAuto input
          Parse ->
             P.printGrammar input
          Gen sizeMax ->

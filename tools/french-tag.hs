@@ -6,7 +6,7 @@ import           Options.Applicative
 import qualified Data.Char as C
 
 
-import qualified NLP.FrenchTAG.Automat as A
+-- import qualified NLP.FrenchTAG.Automat as A
 import qualified NLP.FrenchTAG.Build as B
 import qualified NLP.FrenchTAG.Parse as P
 import qualified NLP.FrenchTAG.Gen as G
@@ -25,7 +25,7 @@ data Options = Options {
 
 
 data Command
-    = Build BuildOptions
+    = Build B.BuildCfg
     -- ^ Build an automaton
     | Parse -- ParseOptions
     -- ^ Only parse and show the input grammar
@@ -37,33 +37,56 @@ data Command
     -- ^ Parse sentences from stdin (one sentence per line)
 
 
---------------------------------------------------
--- Build options
---------------------------------------------------
-
-
-data BuildOptions
-    = Automat
-    | Trie
-    deriving (Show, Read)
-
-
+-- --------------------------------------------------
+-- -- Build options
+-- --------------------------------------------------
+--
+--
+-- data BuildOptions
+--     = Automat
+--     | Trie
+--     | List
+--     deriving (Show, Read)
+--
+--
+-- -- parseBuildOptions :: Monad m => String -> m BuildOptions
 -- parseBuildOptions :: Monad m => String -> m BuildOptions
-parseBuildOptions :: Monad m => String -> m BuildOptions
-parseBuildOptions s = return $ case map C.toLower s of
-    'a':_       -> Automat
-    't':_       -> Trie
-    _           -> Automat
+-- parseBuildOptions s = return $ case map C.toLower s of
+--     'a':_       -> Automat
+--     't':_       -> Trie
+--     'l':_       -> List
+--     _           -> Automat
+--
+--
+-- buildOptions :: Parser Command
+-- buildOptions = Build
+--     <$> argument
+--             -- auto
+--             ( str >>= parseBuildOptions )
+--             ( metavar "BUILD-TYPE"
+--            <> value Automat
+--            <> help "Possible values: automat(on), trie" )
 
 
-buildOptions :: Parser Command
-buildOptions = Build
-    <$> argument
-            -- auto
-            ( str >>= parseBuildOptions )
-            ( metavar "BUILD-TYPE"
-           <> value Automat
-           <> help "Possible values: automat(on), trie" )
+parseCompression :: Monad m => String -> m B.Compress
+parseCompression s = return $ case map C.toLower s of
+    'a':_       -> B.Auto    -- Automaton
+    't':_       -> B.Trie    -- Trie
+    'l':_       -> B.List    -- List
+    _           -> B.Auto
+
+
+buildOptions :: Parser B.BuildCfg
+buildOptions = B.BuildCfg
+    <$> option
+            ( str >>= parseCompression )
+            ( metavar "COMPRESSION-METHOD"
+           <> value B.Auto
+           <> long "compression-method"
+           <> short 'c' )
+    <*> (not <$> switch
+            ( long "no-subtree-sharing"
+           <> short 'n' ))
 
 
 --------------------------------------------------
@@ -113,30 +136,15 @@ genParseOptions = fmap GenParse $ G.GenConf
 --------------------------------------------------
 
 
-parseCompression :: Monad m => String -> m S.Compression
-parseCompression s = return $ case map C.toLower s of
-    'a':_       -> S.Auto    -- Automaton
-    't':_       -> S.Trie    -- Trie
-    _           -> S.Auto
-
-
 statsOptions :: Parser Command
 statsOptions = fmap Stats $ S.StatCfg
     <$> option
-            auto
+            ( Just <$> auto )
             ( metavar "MAX-SIZE"
            <> value Nothing
            <> long "max-size"
            <> short 'm' )
-    <*> (not <$> switch
-            ( long "no-subtree-sharing"
-           <> short 'n' ))
-    <*> option
-            ( str >>= parseCompression )
-            ( metavar "COMPRESSION-METHOD"
-           <> value S.Auto
-           <> long "compression-method"
-           <> short 'c' )
+    <*> buildOptions
 
 
 --------------------------------------------------
@@ -153,7 +161,7 @@ opts = Options
       <> help "Input .xml (e.g. valuation.xml) file" )
     <*> subparser
         ( command "build"
-            (info buildOptions
+            (info (Build <$> buildOptions)
                 (progDesc "Build automaton from the grammar")
                 )
         <> command "parse"
@@ -179,18 +187,8 @@ opts = Options
 run :: Options -> IO ()
 run Options{..} =
     case cmd of
---          Build Base ->
---             A.baseLineRules input
---          Build Share ->
---             A.shareRules input
---          Build AutoBase ->
---             A.baseAutomatRules input
---          Build AutoShare ->
---             A.automatRules input
-         Build Automat ->
-            B.buildAuto input
-         Build Trie ->
-            B.buildTrie input
+         Build cfg ->
+            B.printAuto cfg input
          Parse ->
             P.printGrammar input
          Gen sizeMax ->

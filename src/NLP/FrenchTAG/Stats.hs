@@ -6,7 +6,6 @@
 
 module NLP.FrenchTAG.Stats
 ( StatCfg (..)
-, Compression (..)
 , statsOn
 ) where
 
@@ -14,22 +13,24 @@ module NLP.FrenchTAG.Stats
 import           Control.Monad (unless, forM_)
 import qualified Control.Monad.State.Strict   as E
 
-import qualified Data.Set as S
+-- import qualified Data.Set as S
 import qualified Data.Map.Strict as M
 -- import qualified Data.Text.Lazy      as L
 import qualified Pipes.Prelude as Pipes
 import           Pipes
 
-import qualified NLP.TAG.Vanilla.Tree.Other as O
-import qualified NLP.TAG.Vanilla.Rule as Rule
-import qualified NLP.TAG.Vanilla.SubtreeSharing as LS
-import qualified NLP.TAG.Vanilla.Auto.DAWG as DAWG
-import qualified NLP.TAG.Vanilla.Auto.Trie as Trie
-import qualified NLP.TAG.Vanilla.Earley.Auto as Auto
+-- import qualified NLP.TAG.Vanilla.Tree.Other as O
+-- import qualified NLP.TAG.Vanilla.Rule as Rule
+-- import qualified NLP.TAG.Vanilla.SubtreeSharing as LS
+-- import qualified NLP.TAG.Vanilla.Auto.DAWG as DAWG
+-- import qualified NLP.TAG.Vanilla.Auto.Trie as Trie
+-- import qualified NLP.TAG.Vanilla.Auto.List as List
+-- import qualified NLP.TAG.Vanilla.Earley.Auto as Auto
 import qualified NLP.TAG.Vanilla.Earley.AutoAP as AutoAP
-import qualified NLP.TAG.Vanilla.Earley.TreeGen as TreeGen
+-- import qualified NLP.TAG.Vanilla.Earley.TreeGen as TreeGen
 
 import qualified NLP.FrenchTAG.Gen as G
+import qualified NLP.FrenchTAG.Build as B
 
 
 --------------------------------------------------
@@ -41,20 +42,9 @@ import qualified NLP.FrenchTAG.Gen as G
 data StatCfg = StatCfg
     { maxSize       :: Maybe Int
     -- ^ Optional limit on the sentence size
-    , shareTrees    :: Bool
-    -- ^ Subtree sharing
-    , compression   :: Compression
-    -- ^ Compression technique
+    , buildCfg      :: B.BuildCfg
+    -- ^ Grammar construction configuration
     } deriving (Show, Read, Eq, Ord)
-
-
--- | Parsing method selection.
-data Compression
-    = Auto
-    -- ^ Minimal automaton
-    | Trie
-    -- ^ Prefix trie
-    deriving (Show, Read, Eq, Ord)
 
 
 -- | If the list longer than the given length?
@@ -111,18 +101,8 @@ addStat x y = Stat
 -- std input, and perform the experiment.
 statsOn :: StatCfg -> FilePath -> IO ()
 statsOn StatCfg{..} gramPath = do
-    -- extract the grammar
-    gram <- G.getTrees gramPath
-
-    -- build the automaton
-    let compile = if shareTrees
-            then LS.compile
-            else Rule.compile
-    ruleSet <- compile . map O.decode . S.toList $ gram
-    let auto = case compression of
-            Auto -> DAWG.shell $ DAWG.buildAuto ruleSet
-            Trie -> Trie.shell $ Trie.buildTrie ruleSet
-
+    -- extract the grammar and build the automaton
+    auto <- B.buildAuto buildCfg gramPath
     -- read sentences from input
     let thePipe = hoist lift sentPipe
     statMap <- flip E.execStateT M.empty . runEffect . for thePipe $
@@ -133,7 +113,6 @@ statsOn StatCfg{..} gramPath = do
             liftIO $ putStr " => " >> print stat
             E.modify $ M.insertWith addStat
                 (length sent) (newStat stat)
-
     liftIO $ do
         putStrLn ""
         putStrLn "length,nodes,edges"
@@ -154,19 +133,3 @@ statsOn StatCfg{..} gramPath = do
         return
             ( AutoAP.hyperNodesNum earSt
             , AutoAP.hyperEdgesNum earSt )
-
---     -- | Parse with Auto version.
---     parseAuto auto sent = do
---         earSt <- Auto.earleyAuto auto sent
---         unless (Auto.isRecognized earSt sent)
---             $ error "parseAuto: didn't recognize the sentence!"
---         return
---             ( Auto.hyperNodesNum earSt
---             , Auto.hyperEdgesNum earSt )
--- 
---     -- | Parse with TreeGen version.
---     parseTreeGen ruleSet sent = do
---         earSt <- TreeGen.earley ruleSet sent
---         return
---             ( TreeGen.hyperNodesNum earSt
---             , TreeGen.hyperEdgesNum earSt )

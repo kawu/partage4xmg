@@ -25,7 +25,7 @@ data Options = Options {
 
 
 data Command
-    = Build -- BuildOptions
+    = Build BuildOptions
     -- ^ Build an automaton
     | Parse -- ParseOptions
     -- ^ Only parse and show the input grammar
@@ -42,34 +42,28 @@ data Command
 --------------------------------------------------
 
 
--- data BuildOptions
---     = Base
---     | Share
---     | AutoBase
---     | AutoShare
---     deriving (Show, Read)
--- 
--- 
--- -- parseBuildOptions :: Monad m => String -> m BuildOptions
+data BuildOptions
+    = Automat
+    | Trie
+    deriving (Show, Read)
+
+
 -- parseBuildOptions :: Monad m => String -> m BuildOptions
--- parseBuildOptions s = return $ case map C.toLower s of
---     'b':_       -> Base
---     's':_       -> Share
---     'a':'u':'t':'o':'b':_
---                 -> AutoBase
---     _           -> AutoShare
--- 
--- 
--- buildOptions :: Parser Command
--- buildOptions = Build
---     <$> argument
---             -- auto
---             ( str >>= parseBuildOptions )
---             ( metavar "BUILD-TYPE"
---            <> value AutoShare
---            <> help "Possible values: base, share, autob(ase), auto(share)" )
--- --            <> long "build-type"
--- --            <> short 'b' )
+parseBuildOptions :: Monad m => String -> m BuildOptions
+parseBuildOptions s = return $ case map C.toLower s of
+    'a':_       -> Automat
+    't':_       -> Trie
+    _           -> Automat
+
+
+buildOptions :: Parser Command
+buildOptions = Build
+    <$> argument
+            -- auto
+            ( str >>= parseBuildOptions )
+            ( metavar "BUILD-TYPE"
+           <> value Automat
+           <> help "Possible values: automat(on), trie" )
 
 
 --------------------------------------------------
@@ -119,13 +113,11 @@ genParseOptions = fmap GenParse $ G.GenConf
 --------------------------------------------------
 
 
--- parseBuildOptions :: Monad m => String -> m BuildOptions
-parseParseMethod :: Monad m => String -> m S.ParseMethod
-parseParseMethod s = return $ case map C.toLower s of
-    'b':_       -> S.TreeGen    -- BASE
-    'a':_       -> S.Auto       -- AUTOMATON
-    'o':_       -> S.AutoAP     -- OPTIMAL
-    _           -> S.AutoAP
+parseCompression :: Monad m => String -> m S.Compression
+parseCompression s = return $ case map C.toLower s of
+    'a':_       -> S.Auto    -- Automaton
+    't':_       -> S.Trie    -- Trie
+    _           -> S.Auto
 
 
 statsOptions :: Parser Command
@@ -140,11 +132,11 @@ statsOptions = fmap Stats $ S.StatCfg
             ( long "no-subtree-sharing"
            <> short 'n' ))
     <*> option
-            ( str >>= parseParseMethod )
-            ( metavar "PARSE-METHOD"
-           <> value S.AutoAP
-           <> long "parse-method"
-           <> short 'p' )
+            ( str >>= parseCompression )
+            ( metavar "COMPRESSION-METHOD"
+           <> value S.Auto
+           <> long "compression-method"
+           <> short 'c' )
 
 
 --------------------------------------------------
@@ -161,7 +153,7 @@ opts = Options
       <> help "Input .xml (e.g. valuation.xml) file" )
     <*> subparser
         ( command "build"
-            (info (pure Build) -- buildOptions
+            (info buildOptions
                 (progDesc "Build automaton from the grammar")
                 )
         <> command "parse"
@@ -195,8 +187,10 @@ run Options{..} =
 --             A.baseAutomatRules input
 --          Build AutoShare ->
 --             A.automatRules input
-         Build ->
+         Build Automat ->
             B.buildAuto input
+         Build Trie ->
+            B.buildTrie input
          Parse ->
             P.printGrammar input
          Gen sizeMax ->

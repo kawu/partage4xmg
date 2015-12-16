@@ -36,7 +36,7 @@ import qualified Data.DAWG.Ord.Dynamic    as DAWG
 import qualified NLP.TAG.Vanilla.Tree as LT
 import qualified NLP.TAG.Vanilla.Rule as LR
 import qualified NLP.TAG.Vanilla.SubtreeSharing as LS
-import qualified NLP.TAG.Vanilla.Automaton as LA
+import qualified NLP.TAG.Vanilla.Auto.DAWG as LA
 
 import qualified NLP.FrenchTAG.Parse as P
 

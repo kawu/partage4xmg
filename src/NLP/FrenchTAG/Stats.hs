@@ -6,7 +6,7 @@
 
 module NLP.FrenchTAG.Stats
 ( StatCfg (..)
-, ParseMethod (..)
+, Compression (..)
 , statsOn
 ) where
 
@@ -23,7 +23,8 @@ import           Pipes
 import qualified NLP.TAG.Vanilla.Tree.Other as O
 import qualified NLP.TAG.Vanilla.Rule as Rule
 import qualified NLP.TAG.Vanilla.SubtreeSharing as LS
-import qualified NLP.TAG.Vanilla.Automaton as LA
+import qualified NLP.TAG.Vanilla.Auto.DAWG as DAWG
+import qualified NLP.TAG.Vanilla.Auto.Trie as Trie
 import qualified NLP.TAG.Vanilla.Earley.Auto as Auto
 import qualified NLP.TAG.Vanilla.Earley.AutoAP as AutoAP
 import qualified NLP.TAG.Vanilla.Earley.TreeGen as TreeGen
@@ -42,19 +43,17 @@ data StatCfg = StatCfg
     -- ^ Optional limit on the sentence size
     , shareTrees    :: Bool
     -- ^ Subtree sharing
-    , howParse      :: ParseMethod
-    -- ^ Chosen parsing method
+    , compression   :: Compression
+    -- ^ Compression technique
     } deriving (Show, Read, Eq, Ord)
 
 
 -- | Parsing method selection.
-data ParseMethod
-    = AutoAP
-    -- ^ Automaton with active/passive distinction
-    | Auto
-    -- ^ Automaton with no active/passive distinction
-    | TreeGen
-    -- ^ Version with prefix sharing
+data Compression
+    = Auto
+    -- ^ Minimal automaton
+    | Trie
+    -- ^ Prefix trie
     deriving (Show, Read, Eq, Ord)
 
 
@@ -120,7 +119,9 @@ statsOn StatCfg{..} gramPath = do
             then LS.compile
             else Rule.compile
     ruleSet <- compile . map O.decode . S.toList $ gram
-    let auto = LA.buildAuto ruleSet
+    let auto = case compression of
+            Auto -> DAWG.shell $ DAWG.buildAuto ruleSet
+            Trie -> Trie.shell $ Trie.buildTrie ruleSet
 
     -- read sentences from input
     let thePipe = hoist lift sentPipe
@@ -128,10 +129,7 @@ statsOn StatCfg{..} gramPath = do
         \sent -> unless (sent `longerThan` maxSize) $ do
             stat <- liftIO $ do
                 putStr . show $ sent
-                case howParse of
-                    AutoAP  -> parseAutoAP auto sent
-                    Auto    -> parseAuto auto sent
-                    TreeGen -> parseTreeGen ruleSet sent
+                parseAutoAP auto sent
             liftIO $ putStr " => " >> print stat
             E.modify $ M.insertWith addStat
                 (length sent) (newStat stat)
@@ -157,36 +155,18 @@ statsOn StatCfg{..} gramPath = do
             ( AutoAP.hyperNodesNum earSt
             , AutoAP.hyperEdgesNum earSt )
 
-    -- | Parse with Auto version.
-    parseAuto auto sent = do
-        earSt <- Auto.earleyAuto auto sent
-        unless (Auto.isRecognized earSt sent)
-            $ error "parseAuto: didn't recognize the sentence!"
-        return
-            ( Auto.hyperNodesNum earSt
-            , Auto.hyperEdgesNum earSt )
-
-    -- | Parse with TreeGen version.
-    parseTreeGen ruleSet sent = do
-        earSt <- TreeGen.earley ruleSet sent
-        return
-            ( TreeGen.hyperNodesNum earSt
-            , TreeGen.hyperEdgesNum earSt )
-
-
---         -- results for base version
---         baseEarSt <- LPG.earley ruleSet sent
---         putStr " => (BASE: "
---         -- putStr $ show (LPA.isRecognized  baseEarSt sent) ++ ", "
---         putStr $ show (LPG.hyperNodesNum baseEarSt) ++ ", "
---         putStr $ show (LPG.hyperEdgesNum baseEarSt) ++ ")"
---
---         -- results for automaton
---         autoEarSt <- LPA.earleyAuto auto sent
---         putStr " # (AUTO: "
---         putStr $ show (LPA.isRecognized sent autoEarSt) ++ ", "
---         putStr $ show (LPA.hyperNodesNum autoEarSt) ++ ", "
---         putStr $ show (LPA.hyperEdgesNum autoEarSt) ++ ")"
---
---         putStrLn ""
-
+--     -- | Parse with Auto version.
+--     parseAuto auto sent = do
+--         earSt <- Auto.earleyAuto auto sent
+--         unless (Auto.isRecognized earSt sent)
+--             $ error "parseAuto: didn't recognize the sentence!"
+--         return
+--             ( Auto.hyperNodesNum earSt
+--             , Auto.hyperEdgesNum earSt )
+-- 
+--     -- | Parse with TreeGen version.
+--     parseTreeGen ruleSet sent = do
+--         earSt <- TreeGen.earley ruleSet sent
+--         return
+--             ( TreeGen.hyperNodesNum earSt
+--             , TreeGen.hyperEdgesNum earSt )

@@ -31,8 +31,9 @@ library
 
     exposed-modules:
         NLP.FrenchTAG.Parse
-      , NLP.FrenchTAG.Automat
+      -- , NLP.FrenchTAG.Automat
       , NLP.FrenchTAG.Gen
+      , NLP.FrenchTAG.Stats
 
     ghc-options: -Wall
 

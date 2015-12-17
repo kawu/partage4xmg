@@ -73,6 +73,8 @@ parseCompression s = return $ case map C.toLower s of
     'a':_       -> B.Auto    -- Automaton
     't':_       -> B.Trie    -- Trie
     'l':_       -> B.List    -- List
+    's':_       -> B.SetAuto -- Set of automata
+    'x':_       -> B.SetTrie -- Set of tries
     _           -> B.Auto
 
 

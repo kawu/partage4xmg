@@ -26,6 +26,7 @@ import qualified NLP.TAG.Vanilla.Auto.Mini as Mini
 import qualified NLP.TAG.Vanilla.Auto.DAWG as DAWG
 import qualified NLP.TAG.Vanilla.Auto.Trie as Trie
 import qualified NLP.TAG.Vanilla.Auto.List as List
+import qualified NLP.TAG.Vanilla.Auto.Set  as Set
 
 import qualified NLP.FrenchTAG.Gen as G
 
@@ -42,7 +43,11 @@ data Compress
     | Trie
     -- ^ Prefix trie
     | List
-    -- ^ No compression (list implementation)
+    -- ^ List of lists
+    | SetAuto
+    -- ^ Set of automata, one per rule head symbol
+    | SetTrie
+    -- ^ Set of tries, one per rule head symbol
     deriving (Show, Read, Eq, Ord)
 
 
@@ -61,7 +66,7 @@ data BuildCfg = BuildCfg
 
 
 -- | Local automaton verion.
-type Auto = Mini.Auto (Edge.Edge (Rule.Lab G.NonTerm G.Term))
+type Auto = Mini.AutoR G.NonTerm G.Term
 
 
 -- | Build automaton using the specified compression technique.
@@ -75,10 +80,13 @@ buildAuto BuildCfg{..} gramPath = do
             then LS.compile
             else Rule.compile
     ruleSet <- compile . map O.decode . S.toList $ gram
-    return $ case compLevel of
-            Auto -> DAWG.shell $ DAWG.buildAuto ruleSet
-            Trie -> Trie.shell $ Trie.buildTrie ruleSet
-            List -> List.shell $ List.buildList ruleSet
+    let mkAuto = case compLevel of
+            Auto -> DAWG.mkAuto
+            Trie -> Trie.mkAuto
+            List -> List.mkAuto
+            SetAuto -> Set.mkAuto DAWG.mkAuto
+            SetTrie -> Set.mkAuto Trie.mkAuto
+    return (mkAuto ruleSet)
 
 
 -- | Build automaton and print the individual edges.

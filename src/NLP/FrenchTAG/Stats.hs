@@ -13,21 +13,11 @@ module NLP.FrenchTAG.Stats
 import           Control.Monad (unless, forM_)
 import qualified Control.Monad.State.Strict   as E
 
--- import qualified Data.Set as S
 import qualified Data.Map.Strict as M
--- import qualified Data.Text.Lazy      as L
 import qualified Pipes.Prelude as Pipes
 import           Pipes
 
--- import qualified NLP.TAG.Vanilla.Tree.Other as O
--- import qualified NLP.TAG.Vanilla.Rule as Rule
--- import qualified NLP.TAG.Vanilla.SubtreeSharing as LS
--- import qualified NLP.TAG.Vanilla.Auto.DAWG as DAWG
--- import qualified NLP.TAG.Vanilla.Auto.Trie as Trie
--- import qualified NLP.TAG.Vanilla.Auto.List as List
--- import qualified NLP.TAG.Vanilla.Earley.Auto as Auto
 import qualified NLP.TAG.Vanilla.Earley.AutoAP as AutoAP
--- import qualified NLP.TAG.Vanilla.Earley.TreeGen as TreeGen
 
 import qualified NLP.FrenchTAG.Gen as G
 import qualified NLP.FrenchTAG.Build as B

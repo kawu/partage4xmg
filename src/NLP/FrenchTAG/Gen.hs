@@ -20,7 +20,7 @@ module NLP.FrenchTAG.Gen
 , GenConf (..)
 
 -- * Experiments
-, genAndParseFrom
+, genRandFrom
 
 -- * Utils
 , getTrees
@@ -156,11 +156,9 @@ generateFrom path sizeMax = do
 -------------------------------------------------
 
 
--- | Generate size-bounded derived trees based on
--- the grammar under the path.
--- Only final trees are shown.
-genAndParseFrom :: GenConf -> FilePath -> IO ()
-genAndParseFrom GenConf{..} path = do
+-- | Randomly generate derived sentences.
+genRandFrom :: GenConf -> FilePath -> IO ()
+genRandFrom GenConf{..} path = do
     -- extract the grammar
     gram <- getTrees path
     -- sentence generation pipe

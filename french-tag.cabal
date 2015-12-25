@@ -27,6 +27,7 @@ library
       , dawg-ord            >= 0.1      && < 0.2
       , mtl                 >= 2.1      && < 2.3
       , pipes               >= 4.1      && < 4.2
+      , random              >= 1.0      && < 2.0
       -- , mmorph              >= 1.0      && < 1.1
 
     exposed-modules:
@@ -34,6 +35,7 @@ library
       -- , NLP.FrenchTAG.Automat
       , NLP.FrenchTAG.Gen
       , NLP.FrenchTAG.Stats
+      , NLP.FrenchTAG.Select
 
     ghc-options: -Wall
 

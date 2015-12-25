@@ -11,6 +11,7 @@ import qualified NLP.FrenchTAG.Build as B
 import qualified NLP.FrenchTAG.Parse as P
 import qualified NLP.FrenchTAG.Gen as G
 import qualified NLP.FrenchTAG.Stats as S
+import qualified NLP.FrenchTAG.Select as S
 
 
 --------------------------------------------------
@@ -31,10 +32,13 @@ data Command
     -- ^ Only parse and show the input grammar
     | Gen Int
     -- ^ Generate size-bounded derived trees
-    | GenParse G.GenConf
-    -- ^ Generate and parse size-bounded derived trees
+    | GenRand G.GenConf
+    -- ^ Randomly generate derived sentences
     | Stats S.StatCfg
     -- ^ Parse sentences from stdin (one sentence per line)
+    | Select S.SelectCfg
+    -- ^ Randomly select sentences from stdin (given number
+    -- per sentence length)
 
 
 -- --------------------------------------------------
@@ -111,8 +115,8 @@ genOptions = Gen
 --------------------------------------------------
 
 
-genParseOptions :: Parser Command
-genParseOptions = fmap GenParse $ G.GenConf
+genRandOptions :: Parser Command
+genRandOptions = fmap GenRand $ G.GenConf
     <$> option
             auto
             ( metavar "MAX-SIZE"
@@ -150,6 +154,27 @@ statsOptions = fmap Stats $ S.StatCfg
 
 
 --------------------------------------------------
+-- Selection options
+--------------------------------------------------
+
+
+selectOptions :: Parser Command
+selectOptions = fmap Select $ S.SelectCfg
+    <$> option
+            ( Just <$> auto )
+            ( metavar "MAX-SIZE"
+           <> value Nothing
+           <> long "max-size"
+           <> short 'm' )
+    <*> option
+            auto
+            ( metavar "SELECT-NUM"
+           <> value 100
+           <> long "select-num"
+           <> short 'n' )
+
+
+--------------------------------------------------
 -- Global options
 --------------------------------------------------
 
@@ -174,13 +199,17 @@ opts = Options
             (info genOptions
                 (progDesc "Generate trees based on input grammar file")
                 )
-        <> command "gen-parse"
-            (info genParseOptions
+        <> command "gen-rand"
+            (info genRandOptions
                 (progDesc "Generate and parse trees")
                 )
         <> command "stats"
             (info statsOptions
                 (progDesc "Parse sentences from stdin")
+                )
+        <> command "select"
+            (info selectOptions
+                (progDesc "Select sentences from stdin")
                 )
         )
 
@@ -195,10 +224,12 @@ run Options{..} =
             P.printGrammar input
          Gen sizeMax ->
             G.generateFrom input sizeMax
-         GenParse cfg ->
-            G.genAndParseFrom cfg input
+         GenRand cfg ->
+            G.genRandFrom cfg input
          Stats cfg ->
             S.statsOn cfg input
+         Select cfg ->
+            S.select cfg
 
 
 main :: IO ()

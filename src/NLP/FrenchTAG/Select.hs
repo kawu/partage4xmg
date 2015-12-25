@@ -6,6 +6,7 @@
 
 module NLP.FrenchTAG.Select
 ( select
+, SelectCfg(..)
 ) where
 
 
@@ -19,6 +20,26 @@ import qualified Pipes.Prelude as Pipes
 import           Pipes
 
 import qualified NLP.FrenchTAG.Gen as G
+
+
+--------------------------------------------------
+-- Configuration
+--------------------------------------------------
+
+
+-- | Configuration.
+data SelectCfg = SelectCfg
+    { maxSize       :: Maybe Int
+    -- ^ Optional limit on the sentence size
+    , selNum        :: Int
+    -- ^ The number of sentences to select per sent. length
+    } deriving (Show, Read, Eq, Ord)
+
+
+-- | If the list longer than the given length?
+longerThan :: [a] -> Maybe Int -> Bool
+longerThan _ Nothing   = False
+longerThan xs (Just n) = length xs > n
 
 
 --------------------------------------------------
@@ -38,17 +59,18 @@ sentPipe = Pipes.stdinLn >-> Pipes.map read
 
 -- | Read sentences to parse from stdin and select the given number
 -- of sentences per sentence length.
-select :: Int -> IO ()
-select n = do
+select :: SelectCfg -> IO ()
+select SelectCfg{..} = do
     let thePipe = hoist lift sentPipe
     sentMap <- flip E.execStateT M.empty . runEffect . for thePipe $
-        \sent -> E.modify $ M.insertWith S.union
-            (length sent) (S.singleton sent)
+        \sent -> unless (sent `longerThan` maxSize) $ do
+            E.modify $ M.insertWith S.union
+                (length sent) (S.singleton sent)
     forM_ (M.toList sentMap) $ \(sentLen, sentSet) -> do
         putStr (show sentLen) >> putStr " -> " >> print (S.size sentSet)
     print "############"
     forM_ (M.elems sentMap) $ \sentSet0 -> do
-        sentSet <- subset n sentSet0
+        sentSet <- subset selNum sentSet0
         forM_ (S.toList sentSet) print
 
 

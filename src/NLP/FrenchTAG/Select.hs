@@ -1,7 +1,7 @@
 {-# LANGUAGE RecordWildCards #-}
 
 
--- Extract selected sentences. 
+-- Extract selected sentences.
 
 
 module NLP.FrenchTAG.Select
@@ -10,6 +10,7 @@ module NLP.FrenchTAG.Select
 ) where
 
 
+import           Control.Applicative ((<$>))
 import           Control.Monad (unless, forM_)
 import qualified Control.Monad.State.Strict   as E
 
@@ -70,15 +71,29 @@ select SelectCfg{..} = do
     let thePipe = hoist lift sentPipe
     sentMap <- flip E.execStateT M.empty . runEffect . for thePipe $
         \sent -> unless (sent `longerThan` maxSize) $ do
-            E.modify $ M.insertWith S.union
-                (length sent) (S.singleton sent)
-    forM_ (M.toList sentMap) $ \(sentLen, sentSet) -> do
+            let n = length sent
+            -- liftIO $ print sent
+            set <- M.findWithDefault S.empty n <$> E.get
+            let newSet = S.insert sent set
+            -- length (show newSet) `seq` E.modify $
+            newSet `seq` E.modify $
+            -- E.modify $
+                M.insert n newSet
+--     return ()
+--             length (show sentSet) `seq`
+--                 E.modify $ M.insertWith setUnion
+--                     (length sent) sentSet
+    print "############"
+    forM_ (M.toList sentMap) $ \(sentLen, sentSet) ->
         putStr (show sentLen) >> putStr " -> " >> print (S.size sentSet)
     print "############"
     forM_ (M.elems sentMap) $ \sentSet0 -> do
         sentMultiSet <- multiSubset mergeNum selNum sentSet0
         forM_ (mergeSets sentMultiSet) print
   where
+--     setUnion x y =
+--         let z = S.union x y
+--         in  S.size z `seq` z
     mergeSets = nub . map merge . S.toList
     merge = map nub . transpose . S.toList
 

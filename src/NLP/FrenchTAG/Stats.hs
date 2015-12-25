@@ -13,6 +13,7 @@ module NLP.FrenchTAG.Stats
 import           Control.Monad (unless, forM_)
 import qualified Control.Monad.State.Strict   as E
 
+import qualified Data.Set as S
 import qualified Data.Map.Strict as M
 import qualified Pipes.Prelude as Pipes
 import           Pipes
@@ -49,7 +50,7 @@ longerThan xs (Just n) = length xs > n
 
 
 -- | Produce sentence in the given file.
-sentPipe :: Producer [G.Term] IO ()
+sentPipe :: Producer [[G.Term]] IO ()
 sentPipe = Pipes.stdinLn >-> Pipes.map read
 
 
@@ -99,7 +100,7 @@ statsOn StatCfg{..} gramPath = do
         \sent -> unless (sent `longerThan` maxSize) $ do
             stat <- liftIO $ do
                 putStr . show $ sent
-                parseAutoAP auto sent
+                parseAutoAP auto (map S.fromList sent)
             liftIO $ putStr " => " >> print stat
             E.modify $ M.insertWith addStat
                 (length sent) (newStat stat)

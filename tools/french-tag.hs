@@ -172,6 +172,12 @@ selectOptions = fmap Select $ S.SelectCfg
            <> value 100
            <> long "select-num"
            <> short 'n' )
+    <*> option
+            auto
+            ( metavar "MERGE-NUM"
+           <> value 1
+           <> long "merge-num"
+           <> short 'k' )
 
 
 --------------------------------------------------

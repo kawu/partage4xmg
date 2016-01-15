@@ -93,14 +93,18 @@ printAuto :: BuildCfg -> FilePath -> IO ()
 printAuto cfg gramPath = do
     auto <- buildAuto cfg gramPath
     mapM_ print (Auto.allEdges auto)
+    putStrLn "\n# Maximum numbers of passive and active items per span #\n"
+    putStr "#(PI): " >> print (numberPI auto)
+    putStr "#(AI): " >> print (numberAI auto)
 
 
--- -- | Build automaton and print the individual edges.
--- buildTrie :: FilePath -> IO ()
--- buildTrie gramPath = do
---     -- extract the grammar
---     gram <- G.getTrees gramPath
---     -- build the automaton
---     ruleSet <- LS.compile . map O.decode . S.toList $ gram
---     let trie = Trie.buildTrie ruleSet
---     mapM_ print . Auto.allEdges $ Trie.shell trie
+-- | Maximum possible number of passive items per span.
+numberPI :: Auto -> Int
+numberPI auto = S.size $ S.fromList
+    [x | (_, Auto.Head x, _) <- Auto.allEdges auto]
+
+
+-- | Maximum possible number of active items per span.
+numberAI :: Auto -> Int
+numberAI auto = S.size $ S.fromList
+    [i | (i, Auto.Body _, _) <- Auto.allEdges auto]

@@ -18,7 +18,7 @@ import qualified Data.Map.Strict as M
 import qualified Pipes.Prelude as Pipes
 import           Pipes
 
-import qualified NLP.TAG.Vanilla.Earley.AutoAP as AutoAP
+import qualified NLP.Partage.Earley as Earley
 
 import qualified NLP.FrenchTAG.Gen as G
 import qualified NLP.FrenchTAG.Build as B
@@ -100,7 +100,7 @@ statsOn StatCfg{..} gramPath = do
         \sent -> unless (sent `longerThan` maxSize) $ do
             stat <- liftIO $ do
                 putStr . show $ sent
-                parseAutoAP auto (map S.fromList sent)
+                parseEarley auto (map S.fromList sent)
             liftIO $ putStr " => " >> print stat
             E.modify $ M.insertWith addStat
                 (length sent) (newStat stat)
@@ -116,11 +116,12 @@ statsOn StatCfg{..} gramPath = do
 
   where
 
-    -- | Parse with AutoAP version.
-    parseAutoAP auto sent = do
-        earSt <- AutoAP.earleyAuto auto sent
-        unless (AutoAP.isRecognized sent earSt)
-            $ error "parseAutoAP: didn't recognize the sentence!"
+    -- | Parse with Earley version.
+    parseEarley auto sent = do
+        rec <- Earley.recognizeAuto auto sent
+        unless rec $
+            error "parseEarley: didn't recognize the sentence!"
+        earSt <- Earley.earleyAuto auto sent
         return
-            ( AutoAP.hyperNodesNum earSt
-            , AutoAP.hyperEdgesNum earSt )
+            ( Earley.hyperNodesNum earSt
+            , Earley.hyperEdgesNum earSt )

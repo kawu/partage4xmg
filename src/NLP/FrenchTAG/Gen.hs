@@ -38,12 +38,8 @@ import qualified Data.Tree as R
 import qualified Data.Text.Lazy      as L
 import qualified Data.Set as S
 
-import           NLP.TAG.Vanilla.Core (View(..))
-import qualified NLP.TAG.Vanilla.Tree.Other as O
-import qualified NLP.TAG.Vanilla.Gen as G
--- import qualified NLP.TAG.Vanilla.SubtreeSharing as LS
--- import qualified NLP.TAG.Vanilla.Automaton as LA
--- import qualified NLP.TAG.Vanilla.Earley.Auto as LP
+import qualified NLP.Partage.Tree.Other as O
+import qualified NLP.Partage.Gen as G
 
 import qualified NLP.FrenchTAG.Parse as P
 
@@ -60,8 +56,6 @@ data Term
     = Term L.Text
     | Anchor L.Text
     deriving (Show, Read, Eq, Ord)
-instance View Term where
-    view = show
 
 -- | Non-terminal is just as in the original grammar.
 type NonTerm = L.Text
@@ -142,7 +136,7 @@ generateFrom path sizeMax = do
     gram <- getTrees path
     let pipe = G.generateAll gram sizeMax
            >-> Pipes.filter O.isFinal
-           >-> Pipes.map O.proj
+           >-> Pipes.map O.project
     runEffect . for pipe $ liftIO . print
 --     let pipe = G.generateRand gram $ G.GenConf
 --             { genAllSize = maxSize
@@ -167,7 +161,7 @@ genRandFrom GenConf{..} path = do
             , adjProb    = adjProb }
         pipe = G.generateRand gram conf
             >-> Pipes.filter O.isFinal
-            >-> Pipes.map O.proj
+            >-> Pipes.map O.project
     -- print (conf, treeNum)
     let runPipe = runEffect . for
             (pipe >-> Pipes.take treeNum >-> rmDups)

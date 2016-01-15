@@ -18,15 +18,14 @@ module NLP.FrenchTAG.Build
 
 import qualified Data.Set as S
 
-import qualified NLP.TAG.Vanilla.Tree.Other as O
-import qualified NLP.TAG.Vanilla.Rule as Rule
-import qualified NLP.TAG.Vanilla.SubtreeSharing as LS
-import qualified NLP.TAG.Vanilla.Auto.Edge as Edge
-import qualified NLP.TAG.Vanilla.Auto.Mini as Mini
-import qualified NLP.TAG.Vanilla.Auto.DAWG as DAWG
-import qualified NLP.TAG.Vanilla.Auto.Trie as Trie
-import qualified NLP.TAG.Vanilla.Auto.List as List
-import qualified NLP.TAG.Vanilla.Auto.Set  as Set
+import qualified NLP.Partage.Tree.Other as O
+import qualified NLP.Partage.FactGram as Gram
+-- import qualified NLP.Partage.SubtreeSharing as LS
+import qualified NLP.Partage.Auto as Auto
+import qualified NLP.Partage.Auto.DAWG as DAWG
+import qualified NLP.Partage.Auto.Trie as Trie
+import qualified NLP.Partage.Auto.List as List
+import qualified NLP.Partage.Auto.Set  as Set
 
 import qualified NLP.FrenchTAG.Gen as G
 
@@ -66,7 +65,7 @@ data BuildCfg = BuildCfg
 
 
 -- | Local automaton verion.
-type Auto = Mini.AutoR G.NonTerm G.Term
+type Auto = Auto.GramAuto G.NonTerm G.Term
 
 
 -- | Build automaton using the specified compression technique.
@@ -77,23 +76,23 @@ buildAuto BuildCfg{..} gramPath = do
 
     -- build the automaton
     let compile = if shareTrees
-            then LS.compile
-            else Rule.compile
+            then Gram.flattenWithSharing
+            else Gram.flattenNoSharing
     ruleSet <- compile . map O.decode . S.toList $ gram
-    let mkAuto = case compLevel of
-            Auto -> DAWG.mkAuto
-            Trie -> Trie.mkAuto
-            List -> List.mkAuto
-            SetAuto -> Set.mkAuto DAWG.mkAuto
-            SetTrie -> Set.mkAuto Trie.mkAuto
-    return (mkAuto ruleSet)
+    let fromGram = case compLevel of
+            Auto -> DAWG.fromGram
+            Trie -> Trie.fromGram
+            List -> List.fromGram
+            SetAuto -> Set.fromGram DAWG.fromGram
+            SetTrie -> Set.fromGram Trie.fromGram
+    return (fromGram ruleSet)
 
 
 -- | Build automaton and print the individual edges.
 printAuto :: BuildCfg -> FilePath -> IO ()
 printAuto cfg gramPath = do
     auto <- buildAuto cfg gramPath
-    mapM_ print (Mini.allEdges auto)
+    mapM_ print (Auto.allEdges auto)
 
 
 -- -- | Build automaton and print the individual edges.
@@ -104,4 +103,4 @@ printAuto cfg gramPath = do
 --     -- build the automaton
 --     ruleSet <- LS.compile . map O.decode . S.toList $ gram
 --     let trie = Trie.buildTrie ruleSet
---     mapM_ print . Mini.allEdges $ Trie.shell trie
+--     mapM_ print . Auto.allEdges $ Trie.shell trie

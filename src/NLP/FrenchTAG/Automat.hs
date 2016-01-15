@@ -25,18 +25,13 @@ import qualified Data.Text.Lazy.IO   as L
 -- import qualified Pipes.Prelude       as Pipes
 -- import           Pipes               (for, (>->), hoist)
 -- import qualified Control.Monad.Atom  as Atom
-import qualified Data.DAWG.Ord.Dynamic    as DAWG
-
--- import qualified NLP.TAG.Vanilla.Tree as LT
--- import qualified NLP.TAG.Vanilla.Rule as LR
--- import qualified NLP.TAG.Vanilla.Earley as LE
--- import qualified NLP.TAG.Vanilla.SubtreeSharing as LS
+import qualified Data.DAWG.Ord      as DAWG
 
 
-import qualified NLP.TAG.Vanilla.Tree as LT
-import qualified NLP.TAG.Vanilla.Rule as LR
-import qualified NLP.TAG.Vanilla.SubtreeSharing as LS
-import qualified NLP.TAG.Vanilla.Auto.DAWG as LA
+import qualified NLP.Partage.Tree as LT
+import qualified NLP.Partage.Rule as LR
+import qualified NLP.Partage.SubtreeSharing as LS
+import qualified NLP.Partage.Auto.DAWG as LA
 
 import qualified NLP.FrenchTAG.Parse as P
 

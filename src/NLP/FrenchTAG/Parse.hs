@@ -23,7 +23,7 @@ import qualified Text.HTML.TagSoup   as TagSoup
 import           Text.XML.PolySoup   hiding (P, Q)
 import qualified Text.XML.PolySoup   as PolySoup
 
-import           NLP.TAG.Vanilla.Core    (View(..))
+-- import           NLP.TAG.Vanilla.Core    (View(..))
 
 
 -- import           NLP.FrenchTAG.Tree
@@ -39,8 +39,8 @@ type P a = PolySoup.P (XmlTree L.Text) a
 type Q a = PolySoup.Q (XmlTree L.Text) a
 
 
-instance View L.Text where
-    view = L.unpack
+-- instance View L.Text where
+--     view = L.unpack
 
 
 -- | Syntagmatic symbol.

@@ -45,8 +45,8 @@ data Lemma = Lemma
     -- ^ Name of the lemma (i.e. the lemma itself)
     , cat :: L.Text
     -- ^ Lemma category (e.g. "subst")
-    , treeFam :: L.Text
-    -- ^ Family of which the lemma is an anchor 
+    , treeFams :: [L.Text]
+    -- ^ Families of which the lemma can be an anchor
     } deriving (Show)
 
 
@@ -69,7 +69,7 @@ lexiconQ = true //> lemmaQ
 lemmaQ :: Q Lemma
 lemmaQ = (named "lemma" *> nameCat) `join` \(nam, cat') -> do
     Lemma nam cat' <$>
-        first (node famNameQ)
+        every' (node famNameQ)
   where
     nameCat = (,) <$> attr "name" <*> attr "cat"
     famNameQ = getFamName <$> (named "anchor" *> attr "tree_id")

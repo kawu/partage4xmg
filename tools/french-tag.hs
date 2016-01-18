@@ -9,6 +9,7 @@ import qualified Data.Char as C
 -- import qualified NLP.FrenchTAG.Automat as A
 import qualified NLP.FrenchTAG.Build as B
 import qualified NLP.FrenchTAG.Parse as P
+import qualified NLP.FrenchTAG.ParseLex as L
 import qualified NLP.FrenchTAG.Gen as G
 import qualified NLP.FrenchTAG.Stats as S
 import qualified NLP.FrenchTAG.Select as S
@@ -39,6 +40,8 @@ data Command
     | Select S.SelectCfg
     -- ^ Randomly select sentences from stdin (given number
     -- per sentence length)
+    | Lexicon
+    -- ^ Parse and print the lexicon
 
 
 -- --------------------------------------------------
@@ -217,6 +220,10 @@ opts = Options
             (info selectOptions
                 (progDesc "Select sentences from stdin")
                 )
+        <> command "lexicon"
+            (info (pure Lexicon)
+                (progDesc "Parse and print the lexicon")
+                )
         )
 
 
@@ -236,6 +243,8 @@ run Options{..} =
             S.statsOn cfg input
          Select cfg ->
             S.select cfg
+         Lexicon ->
+            L.printLexicon input
 
 
 main :: IO ()

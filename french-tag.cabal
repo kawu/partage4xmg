@@ -37,6 +37,7 @@ library
       , NLP.FrenchTAG.Stats
       , NLP.FrenchTAG.Select
       , NLP.FrenchTAG.Build
+      , NLP.FrenchTAG.ParseLex
 
     ghc-options: -Wall
 

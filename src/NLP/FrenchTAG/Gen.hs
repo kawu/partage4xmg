@@ -103,10 +103,10 @@ convert (R.Node P.NonTerm{..} xs) =
 getTrees :: FilePath -> IO (S.Set Tree)
 getTrees path = do
     ts <- P.readGrammar path
-    flip E.execStateT S.empty $ E.forM_ ts $ \tree -> do
+    flip E.execStateT S.empty $ E.forM_ ts $ \(_family, tree) -> do
         let tree' = convert tree
         -- Rather nasty trick, but works.  Otherwise the tree is
-        -- not constructed at this precise momend.  Find a better
+        -- not constructed at this precise moment.  Find a better
         -- solution.
         length (showTree tree') `seq`
             E.modify (S.insert tree')

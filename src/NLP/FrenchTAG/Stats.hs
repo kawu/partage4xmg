@@ -100,7 +100,9 @@ statsOn StatCfg{..} gramPath = do
         \sent -> unless (sent `longerThan` maxSize) $ do
             stat <- liftIO $ do
                 putStr . show $ sent
-                parseEarley auto (map S.fromList sent)
+                parseEarley auto
+                    $ Earley.fromSets
+                    $ map S.fromList sent
             liftIO $ putStr " => " >> print stat
             E.modify $ M.insertWith addStat
                 (length sent) (newStat stat)

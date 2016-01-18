@@ -2,7 +2,8 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 
--- Parsing French TAG generated from an FrenchTAG XMG metagrammar.
+-- | Parsing French TAG generated from an FrenchTAG XMG metagrammar.
+-- Should work also with other XMG-generated grammars.
 
 
 module NLP.FrenchTAG.Parse where
@@ -90,19 +91,36 @@ data NonTerm = NonTerm
 type Tree = R.Tree NonTerm
 
 
+-- | Name of a tree family.
+type Family = L.Text
+
+
 -------------------------------------------------
 -- Parsing
 -------------------------------------------------
 
 
 -- | Grammar parser (as a parser).
-grammarP :: P [Tree]
+grammarP :: P [(Family, Tree)]
 grammarP = concat <$> every' grammarQ
 
 
 -- | Grammar parser.
-grammarQ :: Q [Tree]
-grammarQ = true //> treeQ
+grammarQ :: Q [(Family, Tree)]
+grammarQ = concat <$> (true //> entryQ)
+
+
+-- | Entry parser (family + one or more trees).
+entryQ :: Q [(Family, Tree)]
+entryQ = named "entry" `joinR` do 
+    famName <- first familyQ
+    trees <- every' treeQ
+    return [(famName, t) | t <- trees]
+
+
+-- | Tree parser.
+familyQ :: Q Family
+familyQ = named "family" `joinR` first (node name)
 
 
 -- | Tree parser.
@@ -169,17 +187,19 @@ parseTyp x = case x of
 
 
 -- | Parse textual contents of the French TAG XML file.
-parseGrammar :: L.Text -> [Tree]
+parseGrammar :: L.Text -> [(Family, Tree)]
 parseGrammar =
     F.concat . evalP grammarP . parseForest . TagSoup.parseTags
 
 
 -- | Parse the stand-alone French TAG xml file.
-readGrammar :: FilePath -> IO [Tree]
+readGrammar :: FilePath -> IO [(Family, Tree)]
 readGrammar path = parseGrammar <$> L.readFile path
 
 
 printGrammar :: FilePath -> IO ()
 printGrammar =
-  let printTree = putStrLn . R.drawTree . fmap show
+  let printTree (famName, t) = do
+        putStrLn $ "### " ++ show famName ++ " ###"
+        putStrLn . R.drawTree . fmap show $ t
   in  mapM_ printTree <=< readGrammar

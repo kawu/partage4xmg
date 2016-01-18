@@ -72,7 +72,16 @@ lemmaQ = (named "lemma" *> nameCat) `join` \(nam, cat') -> do
         first (node famNameQ)
   where
     nameCat = (,) <$> attr "name" <*> attr "cat"
-    famNameQ = named "anchor" *> attr "tree_id"
+    famNameQ = getFamName <$> (named "anchor" *> attr "tree_id")
+
+
+-- | Extract the family name from ID.
+getFamName :: L.Text -> L.Text
+getFamName x = case L.stripPrefix "family[@name=" x of
+    Nothing -> error "getFamName: wrong prefix"
+    Just y  -> case L.stripSuffix "]" y of
+        Nothing -> error "getFamName: wrong suffix"
+        Just z  -> z
 
 
 -- | Parse textual contents of the French TAG XML file.

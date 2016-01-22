@@ -17,14 +17,15 @@ module NLP.FrenchTAG.Gen
 
 -- * Generation
 , generateFrom
+-- ** Randomized
 , GenConf (..)
-
--- * Experiments
 , genRandFrom
 
 -- * Utils
 , getTrees
 , getTreeMap
+, rmDups
+, printTrees
 ) where
 
 
@@ -44,6 +45,7 @@ import qualified NLP.Partage.Tree.Other as O
 import qualified NLP.Partage.Gen as G
 
 import qualified NLP.FrenchTAG.Parse as P
+import qualified NLP.FrenchTAG.ParseLex as PL
 
 
 
@@ -96,16 +98,27 @@ convert (R.Node P.NonTerm{..} xs) =
     leaf x  = R.Node x []
 
 
+-- | Anchor the given tree with the given terminal.
+anchor :: L.Text -> Tree -> Tree
+anchor a (R.Node n xs) = case n of
+    O.NonTerm x -> R.Node (O.NonTerm x) (map (anchor a) xs)
+    O.Foot x    -> R.Node (O.Foot x) []
+    O.Term t    -> case t of
+            Term _   -> R.Node (O.Term t) []
+            Anchor _ -> R.Node (O.Term (Term a)) []
+
+
 -------------------------------------------------
 -- Grammar extraction
 -------------------------------------------------
 
 
--- | Get the set of TAG trees.
---
--- TODO: Could be based on `getTreeMap`.
-getTrees :: FilePath -> IO (S.Set Tree)
-getTrees path = do
+-- | Get the set of TAG trees with anchors.
+-- Useful when lexicon is not there.
+getAncTrees
+    :: FilePath         -- ^ Grammar
+    -> IO (S.Set Tree)
+getAncTrees path = do
     ts <- P.readGrammar path
     flip E.execStateT S.empty $ E.forM_ ts $ \(_family, tree) -> do
         let tree' = convert tree
@@ -130,12 +143,73 @@ getTreeMap path = do
                 (S.singleton tree'))
 
 
+-- | Get the set of lexicalized TAG trees given the grammar file and
+-- the lexicon file.
+getLexTrees
+    :: FilePath     -- ^ Grammar
+    -> FilePath     -- ^ Lexicon
+    -> IO (S.Set Tree)
+getLexTrees gramPath lexPath = do
+    treeMap <- getTreeMap gramPath
+    lemmas  <- PL.readLexicon lexPath
+    let treeList =
+          [ anchor (PL.name lemma) tree
+          | lemma  <- lemmas
+          , family <- S.toList $ PL.treeFams lemma
+          , tree   <- maybe [] S.toList (M.lookup family treeMap) ]
+    flip E.execStateT S.empty $ E.forM_ treeList $ \tree -> do
+        length (showTree tree) `seq`
+            E.modify (S.insert tree)
+
+
+-- | `getAncTrees` or `getLexTrees`, depending on arguments.
+getTrees
+    :: FilePath         -- ^ Grammar
+    -> Maybe FilePath   -- ^ Lexicon (if present)
+    -> IO (S.Set Tree)
+getTrees gramPath Nothing =
+    getAncTrees gramPath
+getTrees gramPath (Just lexPath) =
+    getLexTrees gramPath lexPath
+
+
+-- | Extract trees with `getTrees` and print them.
+printTrees
+    :: FilePath         -- ^ Grammar
+    -> Maybe FilePath   -- ^ Lexicon (if present)
+    -> IO ()
+printTrees gramPath lexPath = do
+    let printTree = putStrLn . R.drawTree . fmap show
+    mapM_ printTree . S.toList =<< getTrees gramPath lexPath
+
+
 -------------------------------------------------
 -- Generation
 -------------------------------------------------
 
 
--- | Generation configuration.
+-- | Generate size-bounded derived trees based on
+-- the grammar under the path.
+-- Only final trees are shown.
+generateFrom
+    :: FilePath         -- ^ Grammar
+    -> Maybe FilePath   -- ^ Lexicon (if present)
+    -> Int
+    -> IO ()
+generateFrom gramPath mayLexPath sizeMax = do
+    gram <- getTrees gramPath mayLexPath
+    let pipe = G.generateAll gram sizeMax
+           >-> Pipes.filter O.isFinal
+           >-> Pipes.map O.project
+    runEffect . for pipe $ liftIO . print
+
+
+-------------------------------------------------
+-- Randomized generation
+-------------------------------------------------
+
+
+-- | Randomized generation configuration.
 data GenConf = GenConf {
       maxSize   :: Int
     -- ^ Maximal size of a tree
@@ -146,33 +220,15 @@ data GenConf = GenConf {
     } deriving (Show, Eq, Ord)
 
 
--- | Generate size-bounded derived trees based on
--- the grammar under the path.
--- Only final trees are shown.
-generateFrom :: FilePath -> Int -> IO ()
-generateFrom path sizeMax = do
-    gram <- getTrees path
-    let pipe = G.generateAll gram sizeMax
-           >-> Pipes.filter O.isFinal
-           >-> Pipes.map O.project
-    runEffect . for pipe $ liftIO . print
---     let pipe = G.generateRand gram $ G.GenConf
---             { genAllSize = maxSize
---             , adjProb    = adjProb }
---     runEffect . for (pipe >-> Pipes.take treeNum) $ \tree ->
---         lift . putStrLn . R.drawTree . fmap show $ tree
-
-
--------------------------------------------------
--- Parsing experiments
--------------------------------------------------
-
-
 -- | Randomly generate derived sentences.
-genRandFrom :: GenConf -> FilePath -> IO ()
-genRandFrom GenConf{..} path = do
+genRandFrom
+    :: GenConf
+    -> FilePath         -- ^ Grammar
+    -> Maybe FilePath   -- ^ Lexicon
+    -> IO ()
+genRandFrom GenConf{..} gramPath mayLexPath = do
     -- extract the grammar
-    gram <- getTrees path
+    gram <- getTrees gramPath mayLexPath
     -- sentence generation pipe
     let conf = G.GenConf
             { genAllSize = maxSize

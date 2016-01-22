@@ -34,7 +34,7 @@ library
     exposed-modules:
         NLP.FrenchTAG.Parse
       , NLP.FrenchTAG.Gen
-      , NLP.FrenchTAG.GenLex
+      -- , NLP.FrenchTAG.GenLex
       , NLP.FrenchTAG.Stats
       , NLP.FrenchTAG.Select
       , NLP.FrenchTAG.Build

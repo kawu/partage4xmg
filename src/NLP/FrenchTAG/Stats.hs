@@ -90,10 +90,14 @@ addStat x y = Stat
 
 -- | Read the grammar from the input file, sentences to parse from
 -- std input, and perform the experiment.
-statsOn :: StatCfg -> FilePath -> IO ()
-statsOn StatCfg{..} gramPath = do
+statsOn
+    :: StatCfg
+    -> FilePath         -- ^ Grammar
+    -> Maybe FilePath   -- ^ Lexicon (if present)
+    -> IO ()
+statsOn StatCfg{..} gramPath mayLexPath = do
     -- extract the grammar and build the automaton
-    auto <- B.buildAuto buildCfg gramPath
+    auto <- B.buildAuto buildCfg gramPath mayLexPath
     -- read sentences from input
     let thePipe = hoist lift sentPipe
     statMap <- flip E.execStateT M.empty . runEffect . for thePipe $

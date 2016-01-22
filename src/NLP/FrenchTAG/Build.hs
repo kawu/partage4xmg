@@ -14,10 +14,6 @@ module NLP.FrenchTAG.Build
 , Auto
 , buildAuto
 , printAuto
--- ** Lexicalized
-, LexAuto
-, buildLexAuto
-, printLexAuto
 ) where
 
 
@@ -33,7 +29,6 @@ import qualified NLP.Partage.Auto.List as List
 import qualified NLP.Partage.Auto.Set  as Set
 
 import qualified NLP.FrenchTAG.Gen as G
-import qualified NLP.FrenchTAG.GenLex as L
 
 
 --------------------------------------------------
@@ -75,56 +70,14 @@ type Auto = Auto.GramAuto G.NonTerm G.Term
 
 
 -- | Build automaton using the specified compression technique.
-buildAuto :: BuildCfg -> FilePath -> IO Auto
-buildAuto BuildCfg{..} gramPath = do
-    -- extract the grammar
-    gram <- G.getTrees gramPath
-
-    -- build the automaton
-    let compile = if shareTrees
-            then Gram.flattenWithSharing
-            else Gram.flattenNoSharing
-    ruleSet <- compile . map O.decode . S.toList $ gram
-    let fromGram = case compLevel of
-            Auto -> DAWG.fromGram
-            Trie -> Trie.fromGram
-            List -> List.fromGram
-            SetAuto -> Set.fromGram DAWG.fromGram
-            SetTrie -> Set.fromGram Trie.fromGram
-    return (fromGram ruleSet)
-
-
--- | Build automaton and print the individual edges.
-printAuto :: BuildCfg -> FilePath -> IO ()
-printAuto cfg gramPath = do
-    auto <- buildAuto cfg gramPath
-    mapM_ print (Auto.allEdges auto)
-    putStrLn "\n# Maximum numbers of passive and active items per span #\n"
-    putStr "#(PI): " >> print (numberPI auto)
-    putStr "#(AI): " >> print (numberAI auto)
-
-
---------------------------------------------------
--- Contruction -- Lexicalized Version
---------------------------------------------------
-
-
--- | Local, lexicalized automaton verion.
-type LexAuto = Auto.GramAuto L.NonTerm L.Term
-
-
--- | Build automaton using the specified compression technique.
---
--- TODO: a large part common with `buildAuto`!
-buildLexAuto
+buildAuto
     :: BuildCfg
-    -> FilePath     -- ^ Grammar
-    -> FilePath     -- ^ Lexicon
-    -> IO LexAuto
-buildLexAuto BuildCfg{..} gramPath lexPath = do
+    -> FilePath         -- ^ Grammar
+    -> Maybe FilePath   -- ^ Lexicon (if present)
+    -> IO Auto
+buildAuto BuildCfg{..} gramPath mayLexPath = do
     -- extract the grammar
-    gram <- L.getTrees gramPath lexPath
-
+    gram <- G.getTrees gramPath mayLexPath
     -- build the automaton
     let compile = if shareTrees
             then Gram.flattenWithSharing
@@ -140,9 +93,9 @@ buildLexAuto BuildCfg{..} gramPath lexPath = do
 
 
 -- | Build automaton and print the individual edges.
-printLexAuto :: BuildCfg -> FilePath -> FilePath -> IO ()
-printLexAuto cfg gramPath lexPath = do
-    auto <- buildLexAuto cfg gramPath lexPath
+printAuto :: BuildCfg -> FilePath -> Maybe FilePath -> IO ()
+printAuto cfg gramPath mayLexPath = do
+    auto <- buildAuto cfg gramPath mayLexPath
     mapM_ print (Auto.allEdges auto)
     putStrLn "\n# Maximum numbers of passive and active items per span #\n"
     putStr "#(PI): " >> print (numberPI auto)

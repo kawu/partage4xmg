@@ -11,7 +11,7 @@ import qualified NLP.FrenchTAG.Build as B
 import qualified NLP.FrenchTAG.Parse as P
 import qualified NLP.FrenchTAG.ParseLex as L
 import qualified NLP.FrenchTAG.Gen as G
-import qualified NLP.FrenchTAG.GenLex as GL
+-- import qualified NLP.FrenchTAG.GenLex as GL
 import qualified NLP.FrenchTAG.Stats as S
 import qualified NLP.FrenchTAG.Select as S
 
@@ -32,19 +32,19 @@ data Command
     -- ^ Build an automaton
     | Parse -- ParseOptions
     -- ^ Only parse and show the input grammar
-    | Gen Int
+    | Gen (Maybe FilePath) Int
     -- ^ Generate size-bounded derived trees
-    | GenRand G.GenConf
+    | GenRand (Maybe FilePath) G.GenConf
     -- ^ Randomly generate derived sentences
-    | Stats S.StatCfg
+    | Stats (Maybe FilePath) S.StatCfg
     -- ^ Parse sentences from stdin (one sentence per line)
     | Select S.SelectCfg
     -- ^ Randomly select sentences from stdin (given number
     -- per sentence length)
     | Lexicon
     -- ^ Parse and print the lexicon
-    | Experiment FilePath
-    -- ^ Experimental mode (with additional path to the lexicon)
+    | Print (Maybe FilePath)
+    -- ^ Print trees (lexicon allowed, FSs removed)
 
 
 -- --------------------------------------------------
@@ -88,13 +88,17 @@ parseCompression s = return $ case map C.toLower s of
     _           -> B.Auto
 
 
-buildOptions :: Parser (Maybe FilePath, B.BuildCfg)
-buildOptions = (,)
-    <$> optional (strOption
-        ( long "lexicon"
+lexParser :: Parser (Maybe FilePath)
+lexParser = optional . strOption $
+          long "lexicon"
        <> short 'l'
        <> metavar "FILE"
-       <> help "Lexicon .xml file" ))
+       <> help "Lexicon .xml file"
+
+
+buildOptions :: Parser (Maybe FilePath, B.BuildCfg)
+buildOptions = (,)
+    <$> lexParser
     <*> ( B.BuildCfg
         <$> option
                 ( str >>= parseCompression )
@@ -114,7 +118,8 @@ buildOptions = (,)
 
 genOptions :: Parser Command
 genOptions = Gen
-    <$> option
+    <$> lexParser
+    <*> option
             auto
             ( metavar "MAX-SIZE"
            <> value 5
@@ -128,25 +133,27 @@ genOptions = Gen
 
 
 genRandOptions :: Parser Command
-genRandOptions = fmap GenRand $ G.GenConf
-    <$> option
-            auto
-            ( metavar "MAX-SIZE"
-           <> value 5
-           <> long "max-size"
-           <> short 'm' )
-    <*> option
-            auto
-            ( metavar "ADJOIN-PROB"
-           <> value 0.1
-           <> long "adjoin-prob"
-           <> short 'a' )
-    <*> option
-            auto
-            ( metavar "TREE-NUM"
-           <> value 10
-           <> long "tree-num"
-           <> short 'n' )
+genRandOptions = GenRand
+    <$> lexParser
+    <*> (G.GenConf
+        <$> option
+                auto
+                ( metavar "MAX-SIZE"
+               <> value 5
+               <> long "max-size"
+               <> short 'm' )
+        <*> option
+                auto
+                ( metavar "ADJOIN-PROB"
+               <> value 0.1
+               <> long "adjoin-prob"
+               <> short 'a' )
+        <*> option
+                auto
+                ( metavar "TREE-NUM"
+               <> value 10
+               <> long "tree-num"
+               <> short 'n' ))
 
 
 --------------------------------------------------
@@ -155,14 +162,16 @@ genRandOptions = fmap GenRand $ G.GenConf
 
 
 statsOptions :: Parser Command
-statsOptions = fmap Stats $ S.StatCfg
-    <$> option
-            ( Just <$> auto )
-            ( metavar "MAX-SIZE"
-           <> value Nothing
-           <> long "max-size"
-           <> short 'm' )
-    <*> (snd <$> buildOptions)
+statsOptions = Stats 
+    <$> lexParser
+    <*> (S.StatCfg
+          <$> option
+                  ( Just <$> auto )
+                  ( metavar "MAX-SIZE"
+                 <> value Nothing
+                 <> long "max-size"
+                 <> short 'm' )
+          <*> (snd <$> buildOptions))
 
 
 --------------------------------------------------
@@ -234,11 +243,7 @@ opts = Options
                 (progDesc "Parse and print the lexicon")
                 )
         <> command "experiment"
-            (info (Experiment <$> strOption
-                    ( long "lexicon"
-                  <> short 'l'
-                  <> metavar "FILE"
-                  <> help "Lexicon .xml file" ))
+            (info (Print <$> lexParser)
                 (progDesc "Parse and print the lexicon")
                 )
         )
@@ -248,24 +253,22 @@ opts = Options
 run :: Options -> IO ()
 run Options{..} =
     case cmd of
-         Build Nothing cfg ->
-            B.printAuto cfg input
-         Build (Just lex) cfg ->
-            B.printLexAuto cfg input lex
+         Build lexPath cfg ->
+            B.printAuto cfg input lexPath
          Parse ->
             P.printGrammar input
-         Gen sizeMax ->
-            G.generateFrom input sizeMax
-         GenRand cfg ->
-            G.genRandFrom cfg input
-         Stats cfg ->
-            S.statsOn cfg input
+         Print lexicon ->
+            G.printTrees input lexicon
+         Gen lexPath sizeMax ->
+            G.generateFrom input lexPath sizeMax
+         GenRand lexPath cfg ->
+            G.genRandFrom cfg input lexPath
+         Stats lexPath cfg ->
+            S.statsOn cfg input lexPath
          Select cfg ->
             S.select cfg
          Lexicon ->
             L.printLexicon input
-         Experiment lexicon ->
-            GL.printTrees input lexicon
 
 
 main :: IO ()

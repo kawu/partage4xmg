@@ -24,6 +24,7 @@ module NLP.FrenchTAG.Gen
 
 -- * Utils
 , getTrees
+, getTreeMap
 ) where
 
 
@@ -37,6 +38,7 @@ import qualified Pipes.Prelude as Pipes
 import qualified Data.Tree as R
 import qualified Data.Text.Lazy      as L
 import qualified Data.Set as S
+import qualified Data.Map.Strict as M
 
 import qualified NLP.Partage.Tree.Other as O
 import qualified NLP.Partage.Gen as G
@@ -50,8 +52,8 @@ import qualified NLP.FrenchTAG.Parse as P
 -------------------------------------------------
 
 
--- | Terminal in the grammar is either a normal terminal or a node attached to
--- a non-terminal anchor.
+-- | Terminal in the grammar is either a normal terminal or a node
+-- attached to a non-terminal anchor.
 data Term
     = Term L.Text
     | Anchor L.Text
@@ -100,6 +102,8 @@ convert (R.Node P.NonTerm{..} xs) =
 
 
 -- | Get the set of TAG trees.
+--
+-- TODO: Could be based on `getTreeMap`.
 getTrees :: FilePath -> IO (S.Set Tree)
 getTrees path = do
     ts <- P.readGrammar path
@@ -110,6 +114,20 @@ getTrees path = do
         -- solution.
         length (showTree tree') `seq`
             E.modify (S.insert tree')
+
+
+-- | Get the set of TAG trees.
+getTreeMap :: FilePath -> IO (M.Map P.Family (S.Set Tree))
+getTreeMap path = do
+    ts <- P.readGrammar path
+    flip E.execStateT M.empty $ E.forM_ ts $ \(family, tree) -> do
+        let tree' = convert tree
+        -- Rather nasty trick, but works.  Otherwise the tree is
+        -- not constructed at this precise moment.  Find a better
+        -- solution.
+        length (showTree tree') `seq`
+            E.modify (M.insertWith S.union family
+                (S.singleton tree'))
 
 
 -------------------------------------------------

@@ -11,8 +11,13 @@ module NLP.FrenchTAG.Build
 , Compress (..)
 
 -- * Build
+, Auto
 , buildAuto
 , printAuto
+-- ** Lexicalized
+, LexAuto
+, buildLexAuto
+, printLexAuto
 ) where
 
 
@@ -28,6 +33,7 @@ import qualified NLP.Partage.Auto.List as List
 import qualified NLP.Partage.Auto.Set  as Set
 
 import qualified NLP.FrenchTAG.Gen as G
+import qualified NLP.FrenchTAG.GenLex as L
 
 
 --------------------------------------------------
@@ -98,13 +104,63 @@ printAuto cfg gramPath = do
     putStr "#(AI): " >> print (numberAI auto)
 
 
+--------------------------------------------------
+-- Contruction -- Lexicalized Version
+--------------------------------------------------
+
+
+-- | Local, lexicalized automaton verion.
+type LexAuto = Auto.GramAuto L.NonTerm L.Term
+
+
+-- | Build automaton using the specified compression technique.
+--
+-- TODO: a large part common with `buildAuto`!
+buildLexAuto
+    :: BuildCfg
+    -> FilePath     -- ^ Grammar
+    -> FilePath     -- ^ Lexicon
+    -> IO LexAuto
+buildLexAuto BuildCfg{..} gramPath lexPath = do
+    -- extract the grammar
+    gram <- L.getTrees gramPath lexPath
+
+    -- build the automaton
+    let compile = if shareTrees
+            then Gram.flattenWithSharing
+            else Gram.flattenNoSharing
+    ruleSet <- compile . map O.decode . S.toList $ gram
+    let fromGram = case compLevel of
+            Auto -> DAWG.fromGram
+            Trie -> Trie.fromGram
+            List -> List.fromGram
+            SetAuto -> Set.fromGram DAWG.fromGram
+            SetTrie -> Set.fromGram Trie.fromGram
+    return (fromGram ruleSet)
+
+
+-- | Build automaton and print the individual edges.
+printLexAuto :: BuildCfg -> FilePath -> FilePath -> IO ()
+printLexAuto cfg gramPath lexPath = do
+    auto <- buildLexAuto cfg gramPath lexPath
+    mapM_ print (Auto.allEdges auto)
+    putStrLn "\n# Maximum numbers of passive and active items per span #\n"
+    putStr "#(PI): " >> print (numberPI auto)
+    putStr "#(AI): " >> print (numberAI auto)
+
+
+--------------------------------------------------
+-- Stats
+--------------------------------------------------
+
+
 -- | Maximum possible number of passive items per span.
-numberPI :: Auto -> Int
+numberPI :: (Ord a, Ord b) => Auto.GramAuto a b -> Int
 numberPI auto = S.size $ S.fromList
     [x | (_, Auto.Head x, _) <- Auto.allEdges auto]
 
 
 -- | Maximum possible number of active items per span.
-numberAI :: Auto -> Int
+numberAI :: (Ord a, Ord b) => Auto.GramAuto a b -> Int
 numberAI auto = S.size $ S.fromList
     [i | (i, Auto.Body _, _) <- Auto.allEdges auto]

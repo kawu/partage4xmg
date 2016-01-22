@@ -11,6 +11,7 @@ import qualified NLP.FrenchTAG.Build as B
 import qualified NLP.FrenchTAG.Parse as P
 import qualified NLP.FrenchTAG.ParseLex as L
 import qualified NLP.FrenchTAG.Gen as G
+import qualified NLP.FrenchTAG.GenLex as GL
 import qualified NLP.FrenchTAG.Stats as S
 import qualified NLP.FrenchTAG.Select as S
 
@@ -27,7 +28,7 @@ data Options = Options {
 
 
 data Command
-    = Build B.BuildCfg
+    = Build (Maybe FilePath) B.BuildCfg
     -- ^ Build an automaton
     | Parse -- ParseOptions
     -- ^ Only parse and show the input grammar
@@ -42,6 +43,8 @@ data Command
     -- per sentence length)
     | Lexicon
     -- ^ Parse and print the lexicon
+    | Experiment FilePath
+    -- ^ Experimental mode (with additional path to the lexicon)
 
 
 -- --------------------------------------------------
@@ -85,17 +88,23 @@ parseCompression s = return $ case map C.toLower s of
     _           -> B.Auto
 
 
-buildOptions :: Parser B.BuildCfg
-buildOptions = B.BuildCfg
-    <$> option
-            ( str >>= parseCompression )
-            ( metavar "COMPRESSION-METHOD"
-           <> value B.Auto
-           <> long "compression-method"
-           <> short 'c' )
-    <*> (not <$> switch
-            ( long "no-subtree-sharing"
-           <> short 'n' ))
+buildOptions :: Parser (Maybe FilePath, B.BuildCfg)
+buildOptions = (,)
+    <$> optional (strOption
+        ( long "lexicon"
+       <> short 'l'
+       <> metavar "FILE"
+       <> help "Lexicon .xml file" ))
+    <*> ( B.BuildCfg
+        <$> option
+                ( str >>= parseCompression )
+                ( metavar "COMPRESSION-METHOD"
+               <> value B.Auto
+               <> long "compression-method"
+               <> short 'c' )
+        <*> (not <$> switch
+                ( long "no-subtree-sharing"
+               <> short 'n' )) )
 
 
 --------------------------------------------------
@@ -153,7 +162,7 @@ statsOptions = fmap Stats $ S.StatCfg
            <> value Nothing
            <> long "max-size"
            <> short 'm' )
-    <*> buildOptions
+    <*> (snd <$> buildOptions)
 
 
 --------------------------------------------------
@@ -197,7 +206,7 @@ opts = Options
       <> help "Input .xml (e.g. valuation.xml) file" )
     <*> subparser
         ( command "build"
-            (info (Build <$> buildOptions)
+            (info (uncurry Build <$> buildOptions)
                 (progDesc "Build automaton from the grammar")
                 )
         <> command "parse"
@@ -224,6 +233,14 @@ opts = Options
             (info (pure Lexicon)
                 (progDesc "Parse and print the lexicon")
                 )
+        <> command "experiment"
+            (info (Experiment <$> strOption
+                    ( long "lexicon"
+                  <> short 'l'
+                  <> metavar "FILE"
+                  <> help "Lexicon .xml file" ))
+                (progDesc "Parse and print the lexicon")
+                )
         )
 
 
@@ -231,8 +248,10 @@ opts = Options
 run :: Options -> IO ()
 run Options{..} =
     case cmd of
-         Build cfg ->
+         Build Nothing cfg ->
             B.printAuto cfg input
+         Build (Just lex) cfg ->
+            B.printLexAuto cfg input lex
          Parse ->
             P.printGrammar input
          Gen sizeMax ->
@@ -245,6 +264,8 @@ run Options{..} =
             S.select cfg
          Lexicon ->
             L.printLexicon input
+         Experiment lexicon ->
+            GL.printTrees input lexicon
 
 
 main :: IO ()

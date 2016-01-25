@@ -97,7 +97,8 @@ statsOn
     -> IO ()
 statsOn StatCfg{..} gramPath mayLexPath = do
     -- extract the grammar and build the automaton
-    auto <- B.buildAuto buildCfg gramPath mayLexPath
+    auto <- Earley.mkAuto =<<
+        B.buildAuto buildCfg gramPath mayLexPath
     -- read sentences from input
     let thePipe = hoist lift sentPipe
     statMap <- flip E.execStateT M.empty . runEffect . for thePipe $

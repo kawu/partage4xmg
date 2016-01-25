@@ -41,6 +41,8 @@ import qualified Data.Text.Lazy      as L
 import qualified Data.Set as S
 import qualified Data.Map.Strict as M
 
+import qualified Data.Hashable as H
+
 import qualified NLP.Partage.Tree.Other as O
 import qualified NLP.Partage.Gen as G
 
@@ -60,6 +62,14 @@ data Term
     = Term L.Text
     | Anchor L.Text
     deriving (Show, Read, Eq, Ord)
+
+instance H.Hashable Term where
+    hashWithSalt salt (Term x) =
+        salt     `H.hashWithSalt`
+        (0::Int) `H.hashWithSalt` x
+    hashWithSalt salt (Anchor x) =
+        salt     `H.hashWithSalt`
+        (1::Int) `H.hashWithSalt` x
 
 -- | Non-terminal is just as in the original grammar.
 type NonTerm = L.Text

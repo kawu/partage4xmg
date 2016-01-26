@@ -64,15 +64,22 @@ data Stat = Stat
     { nodeNum   :: Int
     , edgeNum   :: Int
     , statNum   :: Int
+    , parsNum   :: Int
     } deriving (Show, Eq, Ord)
 
 
 -- | Create new `Stat` based on (number of nodes, number of edges).
-newStat :: (Int, Int) -> Stat
-newStat (n, m) = Stat
+newStat :: Maybe (Int, Int) -> Stat
+newStat (Just (n, m)) = Stat
     { nodeNum   = n
     , edgeNum   = m
-    , statNum   = 1 }
+    , statNum   = 1
+    , parsNum   = 1 }
+newStat Nothing = Stat
+    { nodeNum   = 0
+    , edgeNum   = 0
+    , statNum   = 1
+    , parsNum   = 0 }
 
 
 -- | Add to `Stat`s.
@@ -80,7 +87,8 @@ addStat :: Stat -> Stat -> Stat
 addStat x y = Stat
     { nodeNum   = nodeNum x + nodeNum y
     , edgeNum   = edgeNum x + edgeNum y
-    , statNum   = statNum x + statNum y }
+    , statNum   = statNum x + statNum y
+    , parsNum   = parsNum x + parsNum y }
 
 
 --------------------------------------------------
@@ -113,22 +121,38 @@ statsOn StatCfg{..} gramPath mayLexPath = do
                 (length sent) (newStat stat)
     liftIO $ do
         putStrLn ""
-        putStrLn "length,nodes,edges"
-        let divide x y = (fromIntegral x :: Double) / fromIntegral y
-        forM_ (M.toList statMap) $ \(n, Stat{..}) -> do
+        putStrLn "length,sentences,parsed,nodes,edges"
+        forM_ (M.toList statMap) $ \(n, stat) -> do
             putStr (show n ++ ",")
-            putStr (show (nodeNum `divide` statNum) ++ ",")
-            putStr (show (edgeNum `divide` statNum))
+            printStat stat
             putStrLn ""
+    liftIO $ do
+        putStrLn ""
+        putStrLn " === TOTAL === "
+        putStrLn ""
+        putStrLn "sentences,parsed,nodes,edges"
+        printStat $ foldl1 addStat (M.elems statMap)
+        putStrLn ""
+
 
   where
 
     -- | Parse with Earley version.
     parseEarley auto sent = do
         rec <- Earley.recognizeAuto auto sent
-        unless rec $
-            error "parseEarley: didn't recognize the sentence!"
-        earSt <- Earley.earleyAuto auto sent
-        return
-            ( Earley.hyperNodesNum earSt
-            , Earley.hyperEdgesNum earSt )
+        if rec then do
+            earSt <- Earley.earleyAuto auto sent
+            return $ Just
+                ( Earley.hyperNodesNum earSt
+                , Earley.hyperEdgesNum earSt )
+        else do return Nothing
+
+    printStat Stat{..} = do
+        putStr (show statNum ++ ",")
+        putStr (show parsNum ++ ",")
+        putStr (show (nodeNum `divide` statNum) ++ ",")
+        putStr (show (edgeNum `divide` statNum))
+
+
+divide :: (Integral a, Integral b) => a -> b -> Double
+divide x y = (fromIntegral x :: Double) / fromIntegral y

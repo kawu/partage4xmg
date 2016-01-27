@@ -1,4 +1,5 @@
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TupleSections #-}
 
 
 -- Build automaton.
@@ -14,6 +15,10 @@ module NLP.FrenchTAG.Build
 , Auto
 , buildAuto
 , printAuto
+
+-- * Temp
+, printRules
+, printWRules
 ) where
 
 
@@ -21,6 +26,7 @@ import qualified Data.Set as S
 
 import qualified NLP.Partage.Tree.Other as O
 import qualified NLP.Partage.FactGram as Gram
+import qualified NLP.Partage.FactGram.Weighted as W
 -- import qualified NLP.Partage.SubtreeSharing as LS
 import qualified NLP.Partage.Auto as Auto
 import qualified NLP.Partage.Auto.DAWG as DAWG
@@ -117,3 +123,68 @@ numberPI auto = S.size $ S.fromList
 numberAI :: (Ord a, Ord b) => Auto.GramAuto a b -> Int
 numberAI auto = S.size $ S.fromList
     [i | (i, Auto.Body _, _) <- Auto.allEdges auto]
+
+
+--------------------------------------------------
+-- Provisional section: no weights
+--------------------------------------------------
+
+
+-- | Weighted rule, local type.
+type Rule = Gram.Rule G.NonTerm G.Term
+
+
+-- | Get weighted rules from the given grammar.
+buildRules
+    :: FilePath         -- ^ Grammar
+    -> Maybe FilePath   -- ^ Lexicon (if present)
+    -> IO (S.Set Rule)
+buildRules gramPath mayLexPath = do
+    -- extract the grammar
+    gram <- G.getTrees gramPath mayLexPath
+    Gram.flattenWithSharing
+        . map O.decode
+        . S.toList $ gram
+
+
+-- | First `buildRules` and then print them.
+printRules
+    :: FilePath         -- ^ Grammar
+    -> Maybe FilePath   -- ^ Lexicon (if present)
+    -> IO ()
+printRules gramPath mayLexPath = do
+    ruleSet <- buildRules gramPath mayLexPath
+    mapM_ print (S.toList ruleSet)
+
+
+--------------------------------------------------
+-- Provisional section: weights
+--------------------------------------------------
+
+
+-- | Weighted rule, local type.
+type WRule = W.Rule G.NonTerm G.Term W.Weight
+
+
+-- | Get weighted rules from the given grammar.
+buildWRules
+    :: FilePath         -- ^ Grammar
+    -> Maybe FilePath   -- ^ Lexicon (if present)
+    -> IO (S.Set WRule)
+buildWRules gramPath mayLexPath = do
+    -- extract the grammar
+    gram <- G.getTrees gramPath mayLexPath
+    return
+        . W.flattenWithWeights
+        . map ((,1) . O.decode)
+        . S.toList $ gram
+
+
+-- | First `buildWRules` and then print them.
+printWRules
+    :: FilePath         -- ^ Grammar
+    -> Maybe FilePath   -- ^ Lexicon (if present)
+    -> IO ()
+printWRules gramPath mayLexPath = do
+    ruleSet <- buildWRules gramPath mayLexPath
+    mapM_ print (S.toList ruleSet)

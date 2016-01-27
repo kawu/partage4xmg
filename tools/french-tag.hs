@@ -45,6 +45,10 @@ data Command
     -- ^ Parse and print the lexicon
     | Print (Maybe FilePath)
     -- ^ Print trees (lexicon allowed, FSs removed)
+    | Rules (Maybe FilePath)
+    -- ^ Experimental mode
+    | Weights (Maybe FilePath)
+    -- ^ Experimental mode
 
 
 -- --------------------------------------------------
@@ -242,9 +246,17 @@ opts = Options
             (info (pure Lexicon)
                 (progDesc "Parse and print the lexicon")
                 )
-        <> command "experiment"
+        <> command "print"
             (info (Print <$> lexParser)
                 (progDesc "Parse and print the lexicon")
+                )
+        <> command "rules"
+            (info (Rules <$> lexParser)
+                (progDesc "Print standard rules; experimental mode")
+                )
+        <> command "weights"
+            (info (Weights <$> lexParser)
+                (progDesc "Print weighted rules; experimental mode")
                 )
         )
 
@@ -269,6 +281,10 @@ run Options{..} =
             S.select cfg
          Lexicon ->
             L.printLexicon input
+         Rules lexicon ->
+            B.printRules input lexicon
+         Weights lexicon ->
+            B.printWRules input lexicon
 
 
 main :: IO ()

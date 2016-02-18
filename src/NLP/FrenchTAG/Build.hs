@@ -23,6 +23,7 @@ module NLP.FrenchTAG.Build
 
 
 import qualified Data.Set as S
+import qualified Data.Map.Strict as M
 
 import qualified NLP.Partage.Tree.Other as O
 import qualified NLP.Partage.FactGram as Gram
@@ -162,15 +163,15 @@ printRules gramPath mayLexPath = do
 --------------------------------------------------
 
 
--- | Weighted rule, local type.
-type WRule = W.Rule G.NonTerm G.Term W.Weight
+---- | Weighted rule, local type.
+--type WRule = W.Rule G.NonTerm G.Term W.Weight
 
 
 -- | Get weighted rules from the given grammar.
 buildWRules
     :: FilePath         -- ^ Grammar
     -> Maybe FilePath   -- ^ Lexicon (if present)
-    -> IO (S.Set WRule)
+    -> IO (M.Map Rule W.Weight)
 buildWRules gramPath mayLexPath = do
     -- extract the grammar
     gram <- G.getTrees gramPath mayLexPath
@@ -186,5 +187,5 @@ printWRules
     -> Maybe FilePath   -- ^ Lexicon (if present)
     -> IO ()
 printWRules gramPath mayLexPath = do
-    ruleSet <- buildWRules gramPath mayLexPath
-    mapM_ print (S.toList ruleSet)
+    ruleMap <- buildWRules gramPath mayLexPath
+    mapM_ print (M.toList ruleMap)

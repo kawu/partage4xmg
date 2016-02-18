@@ -1,0 +1,469 @@
+<grammar>
+  <entry name="ilV_0">
+    <family>ilV</family>
+    <trace>
+      <class>ilV</class>
+      <class>ImpersonalSubject</class>
+      <class>RealisedNonExtractedSubject</class>
+      <class>CanonicalArgument</class>
+      <class>VerbalArgument</class>
+      <class>TopLevelClass</class>
+      <class>SubjectAgreement</class>
+      <class>NonInvertedNominalSubject</class>
+      <class>VerbalArgument</class>
+      <class>TopLevelClass</class>
+      <class>activeVerbMorphology</class>
+      <class>VerbalMorphology</class>
+    </trace>
+    <tree id="ilV_0">
+      <node type="std" name="XMGV_xS_1_1">
+        <narg>
+          <fs coref="@AVM1">
+            <f name="bot">
+              <fs coref="@AVM2">
+                <f name="inv">
+                  <sym varname="@V3"/>
+                </f>
+                <f name="mode">
+                  <vAlt coref="@AD4">
+                    <sym value="ind"/>
+                    <sym value="subj"/>
+                  </vAlt>
+                </f>
+                <f name="wh">
+                  <sym value="-"/>
+                </f>
+              </fs>
+            </f>
+            <f name="cat">
+              <sym value="s"/>
+            </f>
+          </fs>
+        </narg>
+        <node type="std" name="XMGV_xSubjAgr_95_3">
+          <narg>
+            <fs coref="@AVM5">
+              <f name="cat">
+                <sym value="cl"/>
+              </f>
+              <f name="top">
+                <fs coref="@AVM6">
+                  <f name="det">
+                    <sym value="+"/>
+                  </f>
+                  <f name="gen">
+                    <sym value="m"/>
+                  </f>
+                  <f name="num">
+                    <sym value="sg"/>
+                  </f>
+                  <f name="pers">
+                    <sym value="3"/>
+                  </f>
+                </fs>
+              </f>
+            </fs>
+          </narg>
+          <node type="lex" name="XMGV_xil_157_13">
+            <narg>
+              <fs coref="@AVM7">
+                <f name="cat">
+                  <sym value="il"/>
+                </f>
+              </fs>
+            </narg>
+          </node>
+        </node>
+        <node type="std" name="XMGV_xVN_2_2">
+          <narg>
+            <fs coref="@AVM8">
+              <f name="bot">
+                <fs coref="@AVM9">
+                  <f name="gen">
+                    <sym varname="@V10"/>
+                  </f>
+                  <f name="inv">
+                    <sym varname="@V11"/>
+                  </f>
+                  <f name="mode">
+                    <sym varname="@V12"/>
+                  </f>
+                  <f name="neg-adv">
+                    <sym varname="@V13"/>
+                  </f>
+                  <f name="neg-nom">
+                    <sym value="-"/>
+                  </f>
+                  <f name="num">
+                    <sym varname="@V14"/>
+                  </f>
+                  <f name="pers">
+                    <sym varname="@V15"/>
+                  </f>
+                  <f name="pp-gen">
+                    <sym varname="@V16"/>
+                  </f>
+                  <f name="pp-num">
+                    <sym varname="@V17"/>
+                  </f>
+                </fs>
+              </f>
+              <f name="cat">
+                <sym value="vn"/>
+              </f>
+              <f name="top">
+                <fs coref="@AVM18">
+                  <f name="gen">
+                    <sym value="m"/>
+                  </f>
+                  <f name="inv">
+                    <sym varname="@V3"/>
+                  </f>
+                  <f name="mode">
+                    <sym value="@AD4"/>
+                  </f>
+                  <f name="neg-adv">
+                    <sym value="-"/>
+                  </f>
+                  <f name="neg-nom">
+                    <sym varname="@V19"/>
+                  </f>
+                  <f name="num">
+                    <sym value="sg"/>
+                  </f>
+                  <f name="pers">
+                    <sym value="3"/>
+                  </f>
+                </fs>
+              </f>
+            </fs>
+          </narg>
+          <node type="anchor" name="XMGV_xV_1235_16">
+            <narg>
+              <fs coref="@AVM20">
+                <f name="bot">
+                  <fs coref="@AVM21">
+                    <f name="aux-refl">
+                      <sym value="-"/>
+                    </f>
+                    <f name="inv">
+                      <sym value="-"/>
+                    </f>
+                  </fs>
+                </f>
+                <f name="cat">
+                  <sym value="v"/>
+                </f>
+                <f name="top">
+                  <fs coref="@AVM22">
+                    <f name="gen">
+                      <sym varname="@V10"/>
+                    </f>
+                    <f name="inv">
+                      <sym varname="@V11"/>
+                    </f>
+                    <f name="mode">
+                      <sym varname="@V12"/>
+                    </f>
+                    <f name="neg-adv">
+                      <sym varname="@V13"/>
+                    </f>
+                    <f name="neg-nom">
+                      <sym varname="@V19"/>
+                    </f>
+                    <f name="num">
+                      <sym varname="@V14"/>
+                    </f>
+                    <f name="pers">
+                      <sym varname="@V15"/>
+                    </f>
+                    <f name="pp-gen">
+                      <sym varname="@V16"/>
+                    </f>
+                    <f name="pp-num">
+                      <sym varname="@V17"/>
+                    </f>
+                  </fs>
+                </f>
+              </fs>
+            </narg>
+          </node>
+        </node>
+      </node>
+    </tree>
+    <semantics>
+    </semantics>
+    <interface>
+    </interface>
+  </entry>
+  <entry name="n0V_17">
+    <family>n0V</family>
+    <trace>
+      <class>n0V</class>
+      <class>dian0Vimpersonal</class>
+      <class>ImpersonalSubject</class>
+      <class>RealisedNonExtractedSubject</class>
+      <class>CanonicalArgument</class>
+      <class>VerbalArgument</class>
+      <class>TopLevelClass</class>
+      <class>SubjectAgreement</class>
+      <class>NonInvertedNominalSubject</class>
+      <class>VerbalArgument</class>
+      <class>TopLevelClass</class>
+      <class>Object</class>
+      <class>whObject</class>
+      <class>UnboundedQuestion</class>
+      <class>UnboundedExtraction</class>
+      <class>VerbalArgument</class>
+      <class>TopLevelClass</class>
+      <class>NonCanonicalObject</class>
+      <class>activeVerbMorphology</class>
+      <class>VerbalMorphology</class>
+    </trace>
+    <tree id="n0V_17">
+      <node type="std" name="XMGV_xSe_520_271">
+        <narg>
+          <fs coref="@AVM1">
+            <f name="bot">
+              <fs coref="@AVM2">
+                <f name="inv">
+                  <vAlt coref="@AD3">
+                    <sym value="n"/>
+                    <sym value="+"/>
+                    <sym value="-"/>
+                  </vAlt>
+                </f>
+                <f name="princ">
+                  <sym value="@AD3"/>
+                </f>
+                <f name="wh">
+                  <sym value="+"/>
+                </f>
+              </fs>
+            </f>
+            <f name="cat">
+              <sym value="s"/>
+            </f>
+            <f name="top">
+              <fs coref="@AVM4">
+                <f name="princ">
+                  <sym value="+"/>
+                </f>
+              </fs>
+            </f>
+          </fs>
+        </narg>
+        <node type="subst" name="XMGV_xtop_521_272">
+          <narg>
+            <fs coref="@AVM5">
+              <f name="cat">
+                <sym value="n"/>
+              </f>
+              <f name="top">
+                <fs coref="@AVM6">
+                  <f name="gen">
+                    <sym varname="@V7"/>
+                  </f>
+                  <f name="num">
+                    <sym varname="@V8"/>
+                  </f>
+                  <f name="wh">
+                    <sym value="+"/>
+                  </f>
+                </fs>
+              </f>
+            </fs>
+          </narg>
+        </node>
+        <node type="std" name="XMGV_xS_1_189">
+          <narg>
+            <fs coref="@AVM9">
+              <f name="bot">
+                <fs coref="@AVM10">
+                  <f name="inv">
+                    <sym varname="@V11"/>
+                  </f>
+                  <f name="mode">
+                    <vAlt coref="@AD12">
+                      <sym value="ind"/>
+                      <sym value="subj"/>
+                    </vAlt>
+                  </f>
+                  <f name="wh">
+                    <sym value="-"/>
+                  </f>
+                </fs>
+              </f>
+              <f name="cat">
+                <sym value="s"/>
+              </f>
+              <f name="top">
+                <fs coref="@AVM13">
+                  <f name="inv">
+                    <sym value="@AD3"/>
+                  </f>
+                  <f name="wh">
+                    <sym value="-"/>
+                  </f>
+                </fs>
+              </f>
+            </fs>
+          </narg>
+          <node type="std" name="XMGV_xSubjAgr_95_191">
+            <narg>
+              <fs coref="@AVM14">
+                <f name="cat">
+                  <sym value="cl"/>
+                </f>
+                <f name="top">
+                  <fs coref="@AVM15">
+                    <f name="det">
+                      <sym value="+"/>
+                    </f>
+                    <f name="gen">
+                      <sym value="m"/>
+                    </f>
+                    <f name="num">
+                      <sym value="sg"/>
+                    </f>
+                    <f name="pers">
+                      <sym value="3"/>
+                    </f>
+                  </fs>
+                </f>
+              </fs>
+            </narg>
+            <node type="lex" name="XMGV_xil_157_201">
+              <narg>
+                <fs coref="@AVM16">
+                  <f name="cat">
+                    <sym value="il"/>
+                  </f>
+                </fs>
+              </narg>
+            </node>
+          </node>
+          <node type="std" name="XMGV_xVN_2_190">
+            <narg>
+              <fs coref="@AVM17">
+                <f name="bot">
+                  <fs coref="@AVM18">
+                    <f name="gen">
+                      <sym varname="@V19"/>
+                    </f>
+                    <f name="inv">
+                      <sym varname="@V20"/>
+                    </f>
+                    <f name="mode">
+                      <sym varname="@V21"/>
+                    </f>
+                    <f name="neg-adv">
+                      <sym varname="@V22"/>
+                    </f>
+                    <f name="neg-nom">
+                      <sym value="-"/>
+                    </f>
+                    <f name="num">
+                      <sym varname="@V23"/>
+                    </f>
+                    <f name="pers">
+                      <sym varname="@V24"/>
+                    </f>
+                    <f name="pp-gen">
+                      <sym varname="@V7"/>
+                    </f>
+                    <f name="pp-num">
+                      <sym varname="@V8"/>
+                    </f>
+                  </fs>
+                </f>
+                <f name="cat">
+                  <sym value="vn"/>
+                </f>
+                <f name="top">
+                  <fs coref="@AVM25">
+                    <f name="gen">
+                      <sym value="m"/>
+                    </f>
+                    <f name="inv">
+                      <sym varname="@V11"/>
+                    </f>
+                    <f name="mode">
+                      <sym value="@AD12"/>
+                    </f>
+                    <f name="neg-adv">
+                      <sym value="-"/>
+                    </f>
+                    <f name="neg-nom">
+                      <sym varname="@V26"/>
+                    </f>
+                    <f name="num">
+                      <sym value="sg"/>
+                    </f>
+                    <f name="pers">
+                      <sym value="3"/>
+                    </f>
+                  </fs>
+                </f>
+              </fs>
+            </narg>
+            <node type="anchor" name="XMGV_xV_1235_281">
+              <narg>
+                <fs coref="@AVM27">
+                  <f name="bot">
+                    <fs coref="@AVM28">
+                      <f name="aux-refl">
+                        <sym value="-"/>
+                      </f>
+                      <f name="inv">
+                        <sym value="-"/>
+                      </f>
+                    </fs>
+                  </f>
+                  <f name="cat">
+                    <sym value="v"/>
+                  </f>
+                  <f name="top">
+                    <fs coref="@AVM29">
+                      <f name="gen">
+                        <sym varname="@V19"/>
+                      </f>
+                      <f name="inv">
+                        <sym varname="@V20"/>
+                      </f>
+                      <f name="mode">
+                        <sym varname="@V21"/>
+                      </f>
+                      <f name="neg-adv">
+                        <sym varname="@V22"/>
+                      </f>
+                      <f name="neg-nom">
+                        <sym varname="@V26"/>
+                      </f>
+                      <f name="num">
+                        <sym varname="@V23"/>
+                      </f>
+                      <f name="pers">
+                        <sym varname="@V24"/>
+                      </f>
+                      <f name="pp-gen">
+                        <sym varname="@V7"/>
+                      </f>
+                      <f name="pp-num">
+                        <sym varname="@V8"/>
+                      </f>
+                    </fs>
+                  </f>
+                </fs>
+              </narg>
+            </node>
+          </node>
+        </node>
+      </node>
+    </tree>
+    <semantics>
+    </semantics>
+    <interface>
+    </interface>
+  </entry>
+</grammar>

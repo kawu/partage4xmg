@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 
 
@@ -10,15 +11,18 @@ module NLP.FrenchTAG.Stats
 ) where
 
 
-import           Control.Monad (unless, forM_)
+import           Control.Monad (unless, forM_, when)
 import qualified Control.Monad.State.Strict   as E
 
+import qualified Data.Text.Lazy as L
+import qualified Data.Tree as R
 import qualified Data.Set as S
 import qualified Data.Map.Strict as M
 import qualified Pipes.Prelude as Pipes
 import           Pipes
 
 import qualified NLP.Partage.Earley as Earley
+import qualified NLP.Partage.Tree.Other as T
 
 import qualified NLP.FrenchTAG.Gen as G
 import qualified NLP.FrenchTAG.Build as B
@@ -35,6 +39,10 @@ data StatCfg = StatCfg
     -- ^ Optional limit on the sentence size
     , buildCfg      :: B.BuildCfg
     -- ^ Grammar construction configuration
+    , startSym      :: String
+    -- ^ The starting symbol of trees
+    , printParsed   :: Int
+    -- ^ Print the set of parsed trees?
     } deriving (Show, Read, Eq, Ord)
 
 
@@ -112,11 +120,14 @@ statsOn StatCfg{..} gramPath mayLexPath = do
     statMap <- flip E.execStateT M.empty . runEffect . for thePipe $
         \sent -> unless (sent `longerThan` maxSize) $ do
             stat <- liftIO $ do
-                putStr . show $ sent
-                parseEarley auto
-                    $ Earley.fromSets
-                    $ map S.fromList sent
-            liftIO $ putStr " => " >> print stat
+                (stat, parseSet) <- parseEarley auto sent
+                putStr "### "
+                putStr (show sent)
+                putStr " => " >> print stat
+                putStrLn ""
+                forM_ (take printParsed $ parseSet) $ \t -> do
+                    putStrLn . R.drawTree . fmap show . T.encode . Left $ t
+                return stat
             E.modify $ M.insertWith addStat
                 (length sent) (newStat stat)
     liftIO $ do
@@ -139,13 +150,16 @@ statsOn StatCfg{..} gramPath mayLexPath = do
 
     -- | Parse with Earley version.
     parseEarley auto sent = do
-        rec <- Earley.recognizeAuto auto sent
-        if rec then do
-            earSt <- Earley.earleyAuto auto sent
-            return $ Just
-                ( Earley.hyperNodesNum earSt
-                , Earley.hyperEdgesNum earSt )
-        else do return Nothing
+        let input = Earley.fromSets $ map S.fromList sent
+        hype <- Earley.earleyAuto auto input
+        let treeSet = Earley.parsedTrees hype
+                        (L.pack startSym) (length sent)
+        stat <- if not (null treeSet) then do
+                    return $ Just
+                        ( Earley.hyperNodesNum hype
+                        , Earley.hyperEdgesNum hype )
+                 else do return Nothing
+        return (stat, treeSet)
 
     printStat Stat{..} = do
         putStr (show statNum ++ ",")

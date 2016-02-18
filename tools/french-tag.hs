@@ -175,7 +175,20 @@ statsOptions = Stats
                  <> value Nothing
                  <> long "max-size"
                  <> short 'm' )
-          <*> (snd <$> buildOptions))
+          <*> (snd <$> buildOptions)
+          <*> strOption
+                ( metavar "START-SYM"
+               <> long "start-sym"
+               <> short 's' )
+          <*> option
+            auto
+             ( metavar "PRINT-PARSED"
+               <> value 0
+               <> long "print-parsed"
+               <> short 'p' ) )
+--          <*> switch
+--                ( long "print-parsed-trees"
+--               <> short 'p' ) )
 
 
 --------------------------------------------------

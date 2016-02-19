@@ -15,6 +15,10 @@ module NLP.FrenchTAG.Build
 , Auto
 , buildAuto
 , printAuto
+-- ** Weighted
+, WeiAuto
+, buildWeiAuto
+, printWeiAuto
 
 -- * Temp
 , printRules
@@ -22,6 +26,7 @@ module NLP.FrenchTAG.Build
 ) where
 
 
+import           Data.Maybe (fromJust)
 import qualified Data.Set as S
 import qualified Data.Map.Strict as M
 
@@ -32,6 +37,7 @@ import qualified NLP.Partage.FactGram.Weighted as W
 import qualified NLP.Partage.Auto as Auto
 import qualified NLP.Partage.Auto.DAWG as DAWG
 import qualified NLP.Partage.Auto.Trie as Trie
+import qualified NLP.Partage.Auto.WeiTrie as WeiTrie
 import qualified NLP.Partage.Auto.List as List
 import qualified NLP.Partage.Auto.Set  as Set
 
@@ -68,7 +74,7 @@ data BuildCfg = BuildCfg
 
 
 --------------------------------------------------
--- Contruction
+-- Automaton Contruction
 --------------------------------------------------
 
 
@@ -107,6 +113,35 @@ printAuto cfg gramPath mayLexPath = do
     putStrLn "\n# Maximum numbers of passive and active items per span #\n"
     putStr "#(PI): " >> print (numberPI auto)
     putStr "#(AI): " >> print (numberAI auto)
+
+
+--------------------------------------------------
+-- Weighted Automaton Contruction
+--------------------------------------------------
+
+
+-- | Local automaton verion.
+type WeiAuto = Auto.WeiGramAuto G.NonTerm G.Term
+
+
+-- | Build weighted automaton.
+buildWeiAuto
+    :: FilePath         -- ^ Grammar
+    -> Maybe FilePath   -- ^ Lexicon (if present)
+    -> IO WeiAuto
+buildWeiAuto gramPath mayLexPath = do
+    ruleSet <- buildWRules gramPath mayLexPath
+    return (WeiTrie.fromGram ruleSet)
+
+
+-- | Build automaton and print the individual edges.
+printWeiAuto :: FilePath -> Maybe FilePath -> IO ()
+printWeiAuto gramPath mayLexPath = do
+    weiAuto <- buildWeiAuto gramPath mayLexPath
+    let auto = Auto.fromWei weiAuto
+    mapM_ print $
+        [ (i, x, j, fst . fromJust $ Auto.followWei weiAuto i x)
+        | (i, x, j) <- Auto.allEdges auto ]
 
 
 --------------------------------------------------

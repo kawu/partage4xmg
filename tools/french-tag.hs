@@ -297,7 +297,8 @@ run Options{..} =
          Rules lexicon ->
             B.printRules input lexicon
          Weights lexicon ->
-            B.printWRules input lexicon
+            -- B.printWRules input lexicon
+            B.printWeiAuto input lexicon
 
 
 main :: IO ()

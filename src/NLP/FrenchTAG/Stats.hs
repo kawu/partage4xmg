@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TupleSections #-}
 
 
 -- Parsing sentences from input and computing stats.
@@ -8,6 +9,9 @@
 module NLP.FrenchTAG.Stats
 ( StatCfg (..)
 , statsOn
+
+-- * Tmp
+, parseWei
 ) where
 
 
@@ -18,10 +22,13 @@ import qualified Data.Text.Lazy as L
 import qualified Data.Tree as R
 import qualified Data.Set as S
 import qualified Data.Map.Strict as M
+import qualified Data.MemoCombinators as Memo
 import qualified Pipes.Prelude as Pipes
 import           Pipes
 
+import qualified NLP.Partage.FactGram.Weighted as W
 import qualified NLP.Partage.Earley as Earley
+import qualified NLP.Partage.Earley.Prob.AutoAP as AStar
 import qualified NLP.Partage.Tree.Other as T
 
 import qualified NLP.FrenchTAG.Gen as G
@@ -166,6 +173,47 @@ statsOn StatCfg{..} gramPath mayLexPath = do
         putStr (show parsNum ++ ",")
         putStr (show (nodeNum `divide` statNum) ++ ",")
         putStr (show (edgeNum `divide` statNum))
+
+
+--------------------------------------------------
+-- Temp section
+--------------------------------------------------
+
+
+-- | Read the grammar from the input files, sentences to parse from
+-- std input, and perform the experiment.
+parseWei
+    :: FilePath         -- ^ Grammar
+    -> Maybe FilePath   -- ^ Lexicon (if present)
+    -> String           -- ^ Start symbol
+    -> IO ()
+parseWei gramPath mayLexPath begSym = do
+    -- extract the grammar and build the automaton
+    auto <- AStar.mkAuto . W.mkGram
+          . map ((,1) . T.decode)
+          . S.toList
+        =<< G.getTrees gramPath mayLexPath
+    -- read sentences from input
+    runEffect . for sentPipe
+        $ liftIO
+        . parseAStar auto
+        . map head
+
+  where
+
+    -- | Parse with Prob.AutoAP (A*) version.
+    parseAStar :: AStar.Auto G.NonTerm G.Term -> [G.Term] -> IO ()
+    parseAStar auto sent = do
+        let input = AStar.fromList sent
+        b <- AStar.recognizeFromAuto
+                termMemo auto (L.pack begSym) input
+        putStrLn  $ ">>> " ++ show b
+    termMemo = Memo.wrap read show $ Memo.list Memo.char
+
+
+--------------------------------------------------
+-- Misc
+--------------------------------------------------
 
 
 divide :: (Integral a, Integral b) => a -> b -> Double

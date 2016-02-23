@@ -48,6 +48,8 @@ data Command
     | Rules (Maybe FilePath)
     -- ^ Experimental mode
     | Weights (Maybe FilePath)
+    -- ^ Print weighted rules
+    | Tmp (Maybe FilePath) String
     -- ^ Experimental mode
 
 
@@ -166,7 +168,7 @@ genRandOptions = GenRand
 
 
 statsOptions :: Parser Command
-statsOptions = Stats 
+statsOptions = Stats
     <$> lexParser
     <*> (S.StatCfg
           <$> option
@@ -216,6 +218,21 @@ selectOptions = fmap Select $ S.SelectCfg
            <> value 1
            <> long "merge-num"
            <> short 'k' )
+
+
+--------------------------------------------------
+-- Tmp options
+--------------------------------------------------
+
+
+tmpOptions :: Parser Command
+tmpOptions = Tmp
+    <$> lexParser
+    <*> strOption
+        ( long "start-sym"
+       <> short 's'
+       <> metavar "START-SYM"
+       <> help "Start parsing from symbol" )
 
 
 --------------------------------------------------
@@ -271,6 +288,10 @@ opts = Options
             (info (Weights <$> lexParser)
                 (progDesc "Print weighted rules; experimental mode")
                 )
+        <> command "tmp"
+            (info tmpOptions
+                (progDesc "Parse with weights; experimental mode")
+                )
         )
 
 
@@ -299,6 +320,8 @@ run Options{..} =
          Weights lexicon ->
             -- B.printWRules input lexicon
             B.printWeiAuto input lexicon
+         Tmp lexicon begSym ->
+            S.parseWei input lexicon begSym
 
 
 main :: IO ()

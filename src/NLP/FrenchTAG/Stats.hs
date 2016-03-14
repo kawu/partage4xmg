@@ -120,8 +120,8 @@ statsOn
     -> IO ()
 statsOn StatCfg{..} gramPath mayLexPath = do
     -- extract the grammar and build the automaton
-    auto <- Earley.mkAuto =<<
-        B.buildAuto buildCfg gramPath mayLexPath
+    (dag, gramAuto) <- B.buildAuto buildCfg gramPath mayLexPath
+    let auto = Earley.mkAuto dag gramAuto
     -- read sentences from input
     let thePipe = hoist lift sentPipe
     statMap <- flip E.execStateT M.empty . runEffect . for thePipe $
@@ -190,9 +190,10 @@ parseWei
 parseWei gramPath mayLexPath begSym = do
     -- extract the grammar and build the automaton
     auto <- AStar.mkAuto . W.mkGram
-          . map ((,1) . T.decode)
+          -- . map ((,1) . T.decode)
+          . map (,1)
           . S.toList
-        =<< G.getTrees gramPath mayLexPath
+        <$> G.getTrees gramPath mayLexPath
     -- read sentences from input
     runEffect . for sentPipe
         $ liftIO

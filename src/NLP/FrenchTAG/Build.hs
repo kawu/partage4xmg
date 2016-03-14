@@ -31,7 +31,7 @@ import qualified Data.Set as S
 import qualified Data.Map.Strict as M
 
 import qualified NLP.Partage.Tree.Other as O
-import qualified NLP.Partage.FactGram as Gram
+import qualified NLP.Partage.FactGram.DAG as DAG
 import qualified NLP.Partage.FactGram.Weighted as W
 -- import qualified NLP.Partage.SubtreeSharing as LS
 import qualified NLP.Partage.Auto as Auto
@@ -70,6 +70,7 @@ data BuildCfg = BuildCfg
     -- ^ Compression level
     , shareTrees    :: Bool
     -- ^ Subtree sharing
+    -- TODO: this is ignored now!
     } deriving (Show, Read, Eq, Ord)
 
 
@@ -79,7 +80,9 @@ data BuildCfg = BuildCfg
 
 
 -- | Local automaton verion.
-type Auto = Auto.GramAuto G.NonTerm G.Term
+type Auto = Auto.GramAuto -- G.NonTerm G.Term
+type DAG  = DAG.DAG (O.Node G.NonTerm G.Term) ()
+type Gram = DAG.Gram G.NonTerm G.Term
 
 
 -- | Build automaton using the specified compression technique.
@@ -87,28 +90,30 @@ buildAuto
     :: BuildCfg
     -> FilePath         -- ^ Grammar
     -> Maybe FilePath   -- ^ Lexicon (if present)
-    -> IO Auto
+    -> IO (DAG, Auto)
 buildAuto BuildCfg{..} gramPath mayLexPath = do
     -- extract the grammar
-    gram <- G.getTrees gramPath mayLexPath
-    -- build the automaton
-    let compile = if shareTrees
-            then Gram.flattenWithSharing
-            else Gram.flattenNoSharing
-    ruleSet <- compile . map O.decode . S.toList $ gram
+--     gram <- G.getTrees gramPath mayLexPath
+--     -- build the automaton
+--     let compile = if shareTrees
+--             then Gram.flattenWithSharing
+--             else Gram.flattenNoSharing
+--     ruleSet <- DAG.factGram . compile . map O.decode . S.toList $ gram
+    gram <- buildGram gramPath mayLexPath
+    -- ruleSet <- buildRules gramPath mayLexPath
     let fromGram = case compLevel of
             Auto -> DAWG.fromGram
             Trie -> Trie.fromGram
             List -> List.fromGram
             SetAuto -> Set.fromGram DAWG.fromGram
             SetTrie -> Set.fromGram Trie.fromGram
-    return (fromGram ruleSet)
+    return (DAG.dagGram gram, fromGram $ DAG.factGram gram)
 
 
 -- | Build automaton and print the individual edges.
 printAuto :: BuildCfg -> FilePath -> Maybe FilePath -> IO ()
 printAuto cfg gramPath mayLexPath = do
-    auto <- buildAuto cfg gramPath mayLexPath
+    auto <- snd <$> buildAuto cfg gramPath mayLexPath
     mapM_ print (Auto.allEdges auto)
     putStrLn "\n# Maximum numbers of passive and active items per span #\n"
     putStr "#(PI): " >> print (numberPI auto)
@@ -150,13 +155,13 @@ printWeiAuto gramPath mayLexPath = do
 
 
 -- | Maximum possible number of passive items per span.
-numberPI :: (Ord a, Ord b) => Auto.GramAuto a b -> Int
+numberPI :: Auto.GramAuto -> Int
 numberPI auto = S.size $ S.fromList
     [x | (_, Auto.Head x, _) <- Auto.allEdges auto]
 
 
 -- | Maximum possible number of active items per span.
-numberAI :: (Ord a, Ord b) => Auto.GramAuto a b -> Int
+numberAI :: Auto.GramAuto -> Int
 numberAI auto = S.size $ S.fromList
     [i | (i, Auto.Body _, _) <- Auto.allEdges auto]
 
@@ -167,20 +172,17 @@ numberAI auto = S.size $ S.fromList
 
 
 -- | Weighted rule, local type.
-type Rule = Gram.Rule G.NonTerm G.Term
+type Rule = DAG.Rule -- G.NonTerm G.Term
 
 
 -- | Get weighted rules from the given grammar.
-buildRules
+buildGram
     :: FilePath         -- ^ Grammar
     -> Maybe FilePath   -- ^ Lexicon (if present)
-    -> IO (S.Set Rule)
-buildRules gramPath mayLexPath = do
+    -> IO Gram
+buildGram gramPath mayLexPath = do
     -- extract the grammar
-    gram <- G.getTrees gramPath mayLexPath
-    Gram.flattenWithSharing
-        . map O.decode
-        . S.toList $ gram
+    DAG.mkGram . S.toList <$> G.getTrees gramPath mayLexPath
 
 
 -- | First `buildRules` and then print them.
@@ -189,7 +191,11 @@ printRules
     -> Maybe FilePath   -- ^ Lexicon (if present)
     -> IO ()
 printRules gramPath mayLexPath = do
-    ruleSet <- buildRules gramPath mayLexPath
+    gram <- buildGram gramPath mayLexPath
+    let dag = DAG.dagGram gram
+        ruleSet = DAG.factGram gram
+    mapM_ print $ M.toList (DAG.nodeMap dag)
+    putStrLn "============"
     mapM_ print (S.toList ruleSet)
 
 

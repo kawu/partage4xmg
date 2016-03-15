@@ -2,10 +2,10 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 
--- Parsing French TAG generated from an FrenchTAG XMG metagrammar.
+-- Parsing a TAG generated from an XMG metagrammar.
 
 
-module NLP.FrenchTAG.Parse where
+module NLP.Partage4Xmg.Parse where
 
 
 import           Control.Applicative ((*>), (<$>), (<*>),
@@ -22,11 +22,6 @@ import qualified Data.Map.Strict     as M
 import qualified Text.HTML.TagSoup   as TagSoup
 import           Text.XML.PolySoup   hiding (P, Q)
 import qualified Text.XML.PolySoup   as PolySoup
-
--- import           NLP.TAG.Vanilla.Core    (View(..))
-
-
--- import           NLP.FrenchTAG.Tree
 
 
 -------------------------------------------------

@@ -6,12 +6,11 @@ import           Options.Applicative
 import qualified Data.Char as C
 
 
--- import qualified NLP.FrenchTAG.Automat as A
-import qualified NLP.FrenchTAG.Build as B
-import qualified NLP.FrenchTAG.Parse as P
-import qualified NLP.FrenchTAG.Gen as G
-import qualified NLP.FrenchTAG.Stats as S
-import qualified NLP.FrenchTAG.Select as S
+import qualified NLP.Partage4Xmg.Build as B
+import qualified NLP.Partage4Xmg.Parse as P
+import qualified NLP.Partage4Xmg.Gen as G
+import qualified NLP.Partage4Xmg.Stats as S
+import qualified NLP.Partage4Xmg.Select as S
 
 
 --------------------------------------------------
@@ -242,4 +241,4 @@ main :: IO ()
 main =
     execParser (info opts desc) >>= run
   where
-    desc = progDesc "Manipulating FrenchTAG"
+    desc = progDesc "Manipulating XMG grammars"

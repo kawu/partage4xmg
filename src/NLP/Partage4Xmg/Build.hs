@@ -4,7 +4,7 @@
 -- Build automaton.
 
 
-module NLP.FrenchTAG.Build
+module NLP.Partage4Xmg.Build
 (
 -- * Config
   BuildCfg (..)
@@ -27,7 +27,7 @@ import qualified NLP.Partage.Auto.Trie as Trie
 import qualified NLP.Partage.Auto.List as List
 import qualified NLP.Partage.Auto.Set  as Set
 
-import qualified NLP.FrenchTAG.Gen as G
+import qualified NLP.Partage4Xmg.Gen as G
 
 
 --------------------------------------------------

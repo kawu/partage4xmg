@@ -4,7 +4,7 @@
 -- Parsing sentences from input and computing stats.
 
 
-module NLP.FrenchTAG.Stats
+module NLP.Partage4Xmg.Stats
 ( StatCfg (..)
 , statsOn
 ) where
@@ -20,8 +20,8 @@ import           Pipes
 
 import qualified NLP.Partage.Earley as Earley
 
-import qualified NLP.FrenchTAG.Gen as G
-import qualified NLP.FrenchTAG.Build as B
+import qualified NLP.Partage4Xmg.Gen as G
+import qualified NLP.Partage4Xmg.Build as B
 
 
 --------------------------------------------------

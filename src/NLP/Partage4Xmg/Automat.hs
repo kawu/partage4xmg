@@ -6,7 +6,7 @@
 -- and converions to the automaton.
 
 
-module NLP.FrenchTAG.Automat where
+module NLP.Partage4Xmg.Automat where
 
 
 import           Control.Applicative ((<$>))
@@ -33,7 +33,7 @@ import qualified NLP.Partage.Rule as LR
 import qualified NLP.Partage.SubtreeSharing as LS
 import qualified NLP.Partage.Auto.DAWG as LA
 
-import qualified NLP.FrenchTAG.Parse as P
+import qualified NLP.Partage4Xmg.Parse as P
 
 
 -------------------------------------------------

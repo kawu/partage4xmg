@@ -138,3 +138,17 @@ draw s = if S.null s
 -- | Remove duplicates.
 nub :: Ord a => [a] -> [a]
 nub = S.toList . S.fromList
+
+
+--------------------------------------------------
+-- Conversion (obsolete)
+--------------------------------------------------
+
+
+-- inpPipe :: Producer [[G.Term]] IO ()
+-- inpPipe = Pipes.stdinLn >-> Pipes.map read
+--
+-- outPipe :: Consumer [G.Term] IO ()
+-- outPipe = Pipes.map show >-> Pipes.stdoutLn
+--
+-- tmpProg = runEffect $ inpPipe >-> Pipes.map (map head) >-> outPipe

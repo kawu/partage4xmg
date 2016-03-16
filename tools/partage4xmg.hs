@@ -190,10 +190,10 @@ opts = Options
        ( long "input"
       <> short 'i'
       <> metavar "FILE"
-      <> help "Input .xml (e.g. valuation.xml) file" )
+      <> help "Input .xml grammar file" )
     <*> subparser
         ( command "build"
-            (info (Build <$> buildOptions)
+            (info (helper <*> (Build <$> buildOptions))
                 (progDesc "Build automaton from the grammar")
                 )
         <> command "parse"
@@ -201,19 +201,19 @@ opts = Options
                 (progDesc "Parse the input grammar file")
                 )
         <> command "gen"
-            (info genOptions
+            (info (helper <*> genOptions)
                 (progDesc "Generate trees based on input grammar file")
                 )
         <> command "gen-rand"
-            (info genRandOptions
+            (info (helper <*> genRandOptions)
                 (progDesc "Generate and parse trees")
                 )
         <> command "stats"
-            (info statsOptions
+            (info (helper <*> statsOptions)
                 (progDesc "Parse sentences from stdin")
                 )
         <> command "select"
-            (info selectOptions
+            (info (helper <*> selectOptions)
                 (progDesc "Select sentences from stdin")
                 )
         )
@@ -239,6 +239,11 @@ run Options{..} =
 
 main :: IO ()
 main =
-    execParser (info opts desc) >>= run
+    -- execParser (info opts desc) >>= run
+    execParser optsExt >>= run
   where
-    desc = progDesc "Manipulating XMG grammars"
+    -- desc = progDesc "Manipulating XMG grammars"
+    optsExt = info (helper <*> opts)
+       ( fullDesc
+      <> progDesc "Parsing with XMG grammars"
+      <> header "partage4xmg" )

@@ -50,7 +50,7 @@ longerThan xs (Just n) = length xs > n
 
 
 -- | Produce sentence in the given file.
-sentPipe :: Producer [[G.Term]] IO ()
+sentPipe :: Producer [G.Term] IO ()
 sentPipe = Pipes.stdinLn >-> Pipes.map read
 
 
@@ -100,7 +100,7 @@ statsOn StatCfg{..} gramPath = do
         \sent -> unless (sent `longerThan` maxSize) $ do
             stat <- liftIO $ do
                 putStr . show $ sent
-                parseEarley auto (map S.fromList sent)
+                parseEarley auto (map S.singleton sent)
             liftIO $ putStr " => " >> print stat
             E.modify $ M.insertWith addStat
                 (length sent) (newStat stat)

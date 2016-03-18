@@ -32,7 +32,7 @@ import qualified Data.Map.Strict as M
 
 import qualified NLP.Partage.Tree.Other as O
 import qualified NLP.Partage.FactGram.DAG as DAG
-import qualified NLP.Partage.FactGram.Weighted as W
+-- import qualified NLP.Partage.FactGram.Weighted as W
 -- import qualified NLP.Partage.SubtreeSharing as LS
 import qualified NLP.Partage.Auto as Auto
 import qualified NLP.Partage.Auto.DAWG as DAWG
@@ -81,7 +81,7 @@ data BuildCfg = BuildCfg
 
 -- | Local automaton verion.
 type Auto = Auto.GramAuto -- G.NonTerm G.Term
-type DAG  = DAG.DAG (O.Node G.NonTerm G.Term) ()
+type DAG  = DAG.DAG (O.Node G.NonTerm G.Term) DAG.Weight
 type Gram = DAG.Gram G.NonTerm G.Term
 
 
@@ -107,7 +107,9 @@ buildAuto BuildCfg{..} gramPath mayLexPath = do
             List -> List.fromGram
             SetAuto -> Set.fromGram DAWG.fromGram
             SetTrie -> Set.fromGram Trie.fromGram
-    return (DAG.dagGram gram, fromGram $ DAG.factGram gram)
+    return
+      ( DAG.dagGram gram
+      , fromGram . M.keysSet $ DAG.factGram gram )
 
 
 -- | Build automaton and print the individual edges.
@@ -182,7 +184,8 @@ buildGram
     -> IO Gram
 buildGram gramPath mayLexPath = do
     -- extract the grammar
-    DAG.mkGram . S.toList <$> G.getTrees gramPath mayLexPath
+    DAG.mkGram . map (,0) . S.toList <$>
+      G.getTrees gramPath mayLexPath
 
 
 -- | First `buildRules` and then print them.
@@ -196,7 +199,7 @@ printRules gramPath mayLexPath = do
         ruleSet = DAG.factGram gram
     mapM_ print $ M.toList (DAG.nodeMap dag)
     putStrLn "============"
-    mapM_ print (S.toList ruleSet)
+    mapM_ print (M.toList ruleSet)
 
 
 --------------------------------------------------
@@ -212,13 +215,14 @@ printRules gramPath mayLexPath = do
 buildWRules
     :: FilePath         -- ^ Grammar
     -> Maybe FilePath   -- ^ Lexicon (if present)
-    -> IO (M.Map Rule W.Weight)
+    -> IO (M.Map Rule DAG.Weight)
 buildWRules gramPath mayLexPath = do
     -- extract the grammar
     gram <- G.getTrees gramPath mayLexPath
     return
-        . W.flattenWithWeights
-        . map ((,1) . O.decode)
+        . DAG.rulesMapFromDAG
+        . DAG.dagFromWeightedForest
+        . map (,1)
         . S.toList $ gram
 
 

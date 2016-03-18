@@ -26,7 +26,7 @@ import qualified Data.MemoCombinators as Memo
 import qualified Pipes.Prelude as Pipes
 import           Pipes
 
-import qualified NLP.Partage.FactGram.Weighted as W
+import qualified NLP.Partage.FactGram.DAG as D
 import qualified NLP.Partage.Earley as Earley
 import qualified NLP.Partage.Earley.Prob.AutoAP as AStar
 import qualified NLP.Partage.Tree.Other as T
@@ -189,7 +189,7 @@ parseWei
     -> IO ()
 parseWei gramPath mayLexPath begSym = do
     -- extract the grammar and build the automaton
-    auto <- AStar.mkAuto . W.mkGram
+    auto <- AStar.mkAuto . D.mkGram
           -- . map ((,1) . T.decode)
           . map (,1)
           . S.toList

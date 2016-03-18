@@ -21,7 +21,7 @@ library
     hs-source-dirs: src
     build-depends:
         base                >= 4        && < 5
-      , partage             >= 0.1      && < 0.2
+      , partage             >= 0.2      && < 0.3
       , polysoup            >= 0.6      && < 0.7
       , tagsoup             >= 0.13     && < 0.14
       , containers          >= 0.4      && < 0.6

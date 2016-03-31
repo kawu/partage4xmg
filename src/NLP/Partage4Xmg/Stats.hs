@@ -31,8 +31,8 @@ import qualified NLP.Partage.DAG            as D
 import qualified NLP.Partage.Earley         as Earley
 import qualified NLP.Partage.Tree.Other     as T
 
-import qualified NLP.Partage4Xmg.Build        as B
-import qualified NLP.Partage4Xmg.Gen          as G
+import qualified NLP.Partage4Xmg.Build      as B
+import qualified NLP.Partage4Xmg.Gen        as G
 
 
 --------------------------------------------------
@@ -189,7 +189,7 @@ parseWei
     -> IO ()
 parseWei buildData begSym = do
     -- extract the grammar and build the automaton
-    auto <- AStar.mkAuto
+    auto <- AStar.mkAuto termMemo
           . D.mkGram
           . map (,1)
           . S.toList
@@ -206,7 +206,7 @@ parseWei buildData begSym = do
     parseAStar auto sent = do
         let input = AStar.fromList sent
         b <- AStar.recognizeFromAuto
-                termMemo auto (L.pack begSym) input
+                auto (L.pack begSym) input
         putStrLn  $ ">>> " ++ show b
     termMemo = Memo.wrap read show $ Memo.list Memo.char
 

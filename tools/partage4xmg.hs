@@ -21,35 +21,30 @@ import qualified NLP.Partage4Xmg.Select as S
 --------------------------------------------------
 
 
-data Options = Options {
-    input :: FilePath
-  , cmd   :: Command
-  }
-
-
 data Command
-    = Build (Maybe FilePath) B.BuildCfg
+    = Build B.BuildData B.BuildCfg
     -- ^ Build an automaton
-    | Parse -- ParseOptions
+    -- | Parse -- ParseOptions
+    | Parse FilePath
     -- ^ Only parse and show the input grammar
-    | Gen (Maybe FilePath) Int
+    | Gen B.BuildData Int
     -- ^ Generate size-bounded derived trees
-    | GenRand (Maybe FilePath) G.GenConf
+    | GenRand B.BuildData G.GenConf
     -- ^ Randomly generate derived sentences
-    | Stats (Maybe FilePath) S.StatCfg
+    | Stats B.BuildData S.StatCfg
     -- ^ Parse sentences from stdin (one sentence per line)
     | Select S.SelectCfg
     -- ^ Randomly select sentences from stdin (given number
     -- per sentence length)
-    | Lexicon
+    | Lexicon FilePath
     -- ^ Parse and print the lexicon
-    | Print (Maybe FilePath)
+    | Print B.BuildData
     -- ^ Print trees (lexicon allowed, FSs removed)
-    | Rules (Maybe FilePath)
+    | Rules B.BuildData
     -- ^ Experimental mode
-    | Weights (Maybe FilePath)
+    | Weights B.BuildData
     -- ^ Print weighted rules
-    | Tmp (Maybe FilePath) String
+    | Tmp B.BuildData String
     -- ^ Experimental mode
 
 
@@ -94,17 +89,29 @@ parseCompression s = return $ case map C.toLower s of
     _           -> B.Auto
 
 
-lexParser :: Parser (Maybe FilePath)
-lexParser = optional . strOption $
-          long "lexicon"
+-- dataParser :: Parser (Maybe FilePath)
+dataParser :: Parser B.BuildData
+dataParser = B.BuildData
+  <$> strOption
+        ( long "grammar"
+       <> short 'g'
+       <> metavar "FILE"
+       <> help "Grammar .xml file" )
+  <*> ( optional . strOption )
+        ( long "lexicon"
        <> short 'l'
        <> metavar "FILE"
-       <> help "Lexicon .xml file"
+       <> help "Lexicon .xml file" )
+  <*> ( optional . strOption )
+        ( long "auxiliary"
+       <> short 'a'
+       <> metavar "FILE"
+       <> help "Auxiliary grammar/lexicon .xml file" )
 
 
-buildOptions :: Parser (Maybe FilePath, B.BuildCfg)
+buildOptions :: Parser (B.BuildData, B.BuildCfg)
 buildOptions = (,)
-    <$> lexParser
+    <$> dataParser
     <*> ( B.BuildCfg
         <$> option
                 ( str >>= parseCompression )
@@ -118,13 +125,41 @@ buildOptions = (,)
 
 
 --------------------------------------------------
+-- Parse options
+--------------------------------------------------
+
+
+parseOptions :: Parser Command
+parseOptions = Parse
+  <$> strOption
+     ( long "grammar"
+    <> short 'g'
+    <> metavar "FILE"
+    <> help "Grammar .xml file" )
+
+
+--------------------------------------------------
+-- Lexicon options
+--------------------------------------------------
+
+
+lexicOptions :: Parser Command
+lexicOptions = Lexicon
+  <$> strOption
+     ( long "lexicon"
+    <> short 'l'
+    <> metavar "FILE"
+    <> help "Lexicon .xml file" )
+
+
+--------------------------------------------------
 -- Generation options
 --------------------------------------------------
 
 
 genOptions :: Parser Command
 genOptions = Gen
-    <$> lexParser
+    <$> dataParser
     <*> option
             auto
             ( metavar "MAX-SIZE"
@@ -140,7 +175,7 @@ genOptions = Gen
 
 genRandOptions :: Parser Command
 genRandOptions = GenRand
-    <$> lexParser
+    <$> dataParser
     <*> (G.GenConf
         <$> option
                 auto
@@ -169,7 +204,7 @@ genRandOptions = GenRand
 
 statsOptions :: Parser Command
 statsOptions = Stats
-    <$> lexParser
+    <$> dataParser
     <*> (S.StatCfg
           <$> option
                   ( Just <$> auto )
@@ -227,7 +262,7 @@ selectOptions = fmap Select $ S.SelectCfg
 
 tmpOptions :: Parser Command
 tmpOptions = Tmp
-    <$> lexParser
+    <$> dataParser
     <*> strOption
         ( long "start-sym"
        <> short 's'
@@ -240,20 +275,14 @@ tmpOptions = Tmp
 --------------------------------------------------
 
 
-opts :: Parser Options
-opts = Options
-    <$> strOption
-       ( long "input"
-      <> short 'i'
-      <> metavar "FILE"
-      <> help "Input .xml grammar file" )
-    <*> subparser
+opts :: Parser Command
+opts = subparser
         ( command "build"
             (info (helper <*> (uncurry Build <$> buildOptions))
                 (progDesc "Build automaton from the grammar")
                 )
         <> command "parse"
-            (info (pure Parse)
+            (info (helper <*> parseOptions)
                 (progDesc "Parse the input grammar file")
                 )
         <> command "gen"
@@ -273,19 +302,19 @@ opts = Options
                 (progDesc "Select sentences from stdin")
                 )
         <> command "lexicon"
-            (info (pure Lexicon)
+            (info (helper <*> lexicOptions)
                 (progDesc "Parse and print the lexicon")
                 )
         <> command "print"
-            (info (helper <*> (Print <$> lexParser))
+            (info (helper <*> (Print <$> dataParser))
                 (progDesc "Parse and print the lexicon")
                 )
         <> command "rules"
-            (info (helper <*> (Rules <$> lexParser))
+            (info (helper <*> (Rules <$> dataParser))
                 (progDesc "Print standard rules; experimental mode")
                 )
         <> command "weights"
-            (info (helper <*> (Weights <$> lexParser))
+            (info (helper <*> (Weights <$> dataParser))
                 (progDesc "Print weighted rules; experimental mode")
                 )
         <> command "tmp"
@@ -296,32 +325,31 @@ opts = Options
 
 
 -- | Run program depending on the cmdline arguments.
-run :: Options -> IO ()
-run Options{..} =
-    case cmd of
-         Build lexPath cfg ->
-            B.printAuto cfg input lexPath
-         Parse ->
-            P.printGrammar input
-         Print lexicon ->
-            G.printTrees input lexicon
-         Gen lexPath sizeMax ->
-            G.generateFrom input lexPath sizeMax
-         GenRand lexPath cfg ->
-            G.genRandFrom cfg input lexPath
-         Stats lexPath cfg ->
-            S.statsOn cfg input lexPath
+run :: Command -> IO ()
+run cmd = case cmd of
+         Build buildData cfg ->
+            B.printAuto cfg buildData
+         Parse grammarPath ->
+            P.printGrammar grammarPath
+         Print B.BuildData{..} ->
+            G.printTrees gramPath mayLexPath
+         Gen B.BuildData{..} sizeMax ->
+            G.generateFrom gramPath mayLexPath sizeMax
+         GenRand B.BuildData{..} cfg ->
+            G.genRandFrom cfg gramPath mayLexPath
+         Stats buildData cfg ->
+            S.statsOn cfg buildData
          Select cfg ->
             S.select cfg
-         Lexicon ->
-            L.printLexicon input
-         Rules lexicon ->
-            B.printRules input lexicon
-         Weights lexicon ->
+         Lexicon lexPath ->
+            L.printLexicon lexPath
+         Rules buildData ->
+            B.printRules buildData
+         Weights buildData ->
             -- B.printWRules input lexicon
-            B.printWeiAuto input lexicon
-         Tmp lexicon begSym ->
-            S.parseWei input lexicon begSym
+            B.printWeiAuto buildData
+         Tmp buildData begSym ->
+            S.parseWei buildData begSym
 
 
 main :: IO ()

@@ -115,12 +115,13 @@ addStat x y = Stat
 -- std input, and perform the experiment.
 statsOn
     :: StatCfg
-    -> FilePath         -- ^ Grammar
-    -> Maybe FilePath   -- ^ Lexicon (if present)
+    -> B.BuildData
+    -- -> FilePath         -- ^ Grammar
+    -- -> Maybe FilePath   -- ^ Lexicon (if present)
     -> IO ()
-statsOn StatCfg{..} gramPath mayLexPath = do
+statsOn StatCfg{..} buildData = do
     -- extract the grammar and build the automaton
-    (dag, gramAuto) <- B.buildAuto buildCfg gramPath mayLexPath
+    (dag, gramAuto) <- B.buildAuto buildCfg buildData
     let auto = Earley.mkAuto dag gramAuto
     -- read sentences from input
     let thePipe = hoist lift sentPipe
@@ -183,17 +184,16 @@ statsOn StatCfg{..} gramPath mayLexPath = do
 -- | Read the grammar from the input files, sentences to parse from
 -- std input, and perform the experiment.
 parseWei
-    :: FilePath         -- ^ Grammar
-    -> Maybe FilePath   -- ^ Lexicon (if present)
+    :: B.BuildData
     -> String           -- ^ Start symbol
     -> IO ()
-parseWei gramPath mayLexPath begSym = do
+parseWei buildData begSym = do
     -- extract the grammar and build the automaton
-    auto <- AStar.mkAuto . D.mkGram
-          -- . map ((,1) . T.decode)
+    auto <- AStar.mkAuto
+          . D.mkGram
           . map (,1)
           . S.toList
-        <$> G.getTrees gramPath mayLexPath
+        <$> B.getTrees buildData
     -- read sentences from input
     runEffect . for sentPipe
         $ liftIO

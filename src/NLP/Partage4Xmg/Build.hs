@@ -5,7 +5,7 @@
 -- Build automaton.
 
 
-module NLP.FrenchTAG.Build
+module NLP.Partage4Xmg.Build
 (
 -- * Config
   BuildCfg (..)
@@ -31,7 +31,7 @@ import qualified Data.Set as S
 import qualified Data.Map.Strict as M
 
 import qualified NLP.Partage.Tree.Other as O
-import qualified NLP.Partage.FactGram.DAG as DAG
+import qualified NLP.Partage.DAG as DAG
 -- import qualified NLP.Partage.FactGram.Weighted as W
 -- import qualified NLP.Partage.SubtreeSharing as LS
 import qualified NLP.Partage.Auto as Auto
@@ -41,7 +41,7 @@ import qualified NLP.Partage.Auto.WeiTrie as WeiTrie
 import qualified NLP.Partage.Auto.List as List
 import qualified NLP.Partage.Auto.Set  as Set
 
-import qualified NLP.FrenchTAG.Gen as G
+import qualified NLP.Partage4Xmg.Gen as G
 
 
 --------------------------------------------------
@@ -197,7 +197,10 @@ printRules gramPath mayLexPath = do
     gram <- buildGram gramPath mayLexPath
     let dag = DAG.dagGram gram
         ruleSet = DAG.factGram gram
-    mapM_ print $ M.toList (DAG.nodeMap dag)
+    -- mapM_ print $ M.toList (DAG.nodeMap dag)
+    mapM_
+     (\i -> print (i, DAG.label i dag, DAG.value i dag, DAG.edges i dag))
+     (S.toList (DAG.nodeSet dag))
     putStrLn "============"
     mapM_ print (M.toList ruleSet)
 

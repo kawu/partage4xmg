@@ -5,7 +5,7 @@
 -- A provisional module responsible for LTAG grammar creation.
 
 
-module NLP.FrenchTAG.Gram where
+module NLP.Partage4Xmg.Gram where
 
 
 import           Control.Applicative ((<$>))
@@ -29,7 +29,7 @@ import qualified NLP.LTAG.Tree2 as LT
 import qualified NLP.LTAG.Rule as LR
 import qualified NLP.LTAG.Earley5 as LE
 
-import qualified NLP.FrenchTAG.Parse as P
+import qualified NLP.Partage4Xmg.Parse as P
 
 
 -- | An LTAG tree.

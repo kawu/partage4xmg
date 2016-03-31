@@ -6,7 +6,7 @@
 -- Should work also with other XMG-generated grammars.
 
 
-module NLP.FrenchTAG.Parse where
+module NLP.Partage4Xmg.Parse where
 
 
 import           Control.Applicative ((*>), (<$>), (<*>),
@@ -27,7 +27,7 @@ import qualified Text.XML.PolySoup   as PolySoup
 -- import           NLP.TAG.Vanilla.Core    (View(..))
 
 
--- import           NLP.FrenchTAG.Tree
+-- import           NLP.Partage4Xmg.Tree
 
 
 -------------------------------------------------
@@ -87,7 +87,7 @@ data NonTerm = NonTerm
     deriving (Show, Eq, Ord)
 
 
--- | FrenchTAG tree.
+-- | Partage4Xmg tree.
 type Tree = R.Tree NonTerm
 
 

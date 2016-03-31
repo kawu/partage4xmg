@@ -4,7 +4,7 @@
 -- Datatype prepared for generation when the lexicon is present.
 
 
-module NLP.FrenchTAG.GenLex
+module NLP.Partage4Xmg.GenLex
 (
 -- * Types
   Tree
@@ -41,9 +41,9 @@ import qualified Data.Map.Strict as M
 import qualified NLP.Partage.Tree.Other as O
 import qualified NLP.Partage.Gen as G
 
-import qualified NLP.FrenchTAG.Parse as P
-import qualified NLP.FrenchTAG.ParseLex as PL
-import qualified NLP.FrenchTAG.Gen as F
+import qualified NLP.Partage4Xmg.Parse as P
+import qualified NLP.Partage4Xmg.ParseLex as PL
+import qualified NLP.Partage4Xmg.Gen as F
 
 
 

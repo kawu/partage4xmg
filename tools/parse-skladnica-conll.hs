@@ -60,9 +60,9 @@ convertWord x   = x
 
 
 -- | Convert the sentence to a form appropriate for parsing.
-convert :: Sentence -> [[Term L.Text]]
+convert :: Sentence -> [Term L.Text]
 convert
-    = map (\x -> [Term $ convertWord x])
+    = map (\x -> Term (convertWord x))
     . map (V.!2)
     . V.toList
 

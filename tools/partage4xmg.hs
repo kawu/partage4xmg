@@ -6,14 +6,14 @@ import           Options.Applicative
 import qualified Data.Char as C
 
 
--- import qualified NLP.FrenchTAG.Automat as A
-import qualified NLP.FrenchTAG.Build as B
-import qualified NLP.FrenchTAG.Parse as P
-import qualified NLP.FrenchTAG.ParseLex as L
-import qualified NLP.FrenchTAG.Gen as G
--- import qualified NLP.FrenchTAG.GenLex as GL
-import qualified NLP.FrenchTAG.Stats as S
-import qualified NLP.FrenchTAG.Select as S
+-- import qualified NLP.Partage4Xmg.Automat as A
+import qualified NLP.Partage4Xmg.Build as B
+import qualified NLP.Partage4Xmg.Parse as P
+import qualified NLP.Partage4Xmg.ParseLex as L
+import qualified NLP.Partage4Xmg.Gen as G
+-- import qualified NLP.Partage4Xmg.GenLex as GL
+import qualified NLP.Partage4Xmg.Stats as S
+import qualified NLP.Partage4Xmg.Select as S
 
 
 --------------------------------------------------
@@ -246,10 +246,10 @@ opts = Options
        ( long "input"
       <> short 'i'
       <> metavar "FILE"
-      <> help "Input .xml (e.g. valuation.xml) file" )
+      <> help "Input .xml grammar file" )
     <*> subparser
         ( command "build"
-            (info (uncurry Build <$> buildOptions)
+            (info (helper <*> (uncurry Build <$> buildOptions))
                 (progDesc "Build automaton from the grammar")
                 )
         <> command "parse"
@@ -257,19 +257,19 @@ opts = Options
                 (progDesc "Parse the input grammar file")
                 )
         <> command "gen"
-            (info genOptions
+            (info (helper <*> genOptions)
                 (progDesc "Generate trees based on input grammar file")
                 )
         <> command "gen-rand"
-            (info genRandOptions
+            (info (helper <*> genRandOptions)
                 (progDesc "Generate and parse trees")
                 )
         <> command "stats"
-            (info statsOptions
+            (info (helper <*> statsOptions)
                 (progDesc "Parse sentences from stdin")
                 )
         <> command "select"
-            (info selectOptions
+            (info (helper <*> selectOptions)
                 (progDesc "Select sentences from stdin")
                 )
         <> command "lexicon"
@@ -277,19 +277,19 @@ opts = Options
                 (progDesc "Parse and print the lexicon")
                 )
         <> command "print"
-            (info (Print <$> lexParser)
+            (info (helper <*> (Print <$> lexParser))
                 (progDesc "Parse and print the lexicon")
                 )
         <> command "rules"
-            (info (Rules <$> lexParser)
+            (info (helper <*> (Rules <$> lexParser))
                 (progDesc "Print standard rules; experimental mode")
                 )
         <> command "weights"
-            (info (Weights <$> lexParser)
+            (info (helper <*> (Weights <$> lexParser))
                 (progDesc "Print weighted rules; experimental mode")
                 )
         <> command "tmp"
-            (info tmpOptions
+            (info (helper <*> tmpOptions)
                 (progDesc "Parse with weights; experimental mode")
                 )
         )
@@ -326,6 +326,9 @@ run Options{..} =
 
 main :: IO ()
 main =
-    execParser (info opts desc) >>= run
+    execParser optsExt >>= run
   where
-    desc = progDesc "Manipulating FrenchTAG"
+    optsExt = info (helper <*> opts)
+       ( fullDesc
+      <> progDesc "Parsing with XMG grammars"
+      <> header "partage4xmg" )

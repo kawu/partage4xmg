@@ -1,12 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE TupleSections     #-}
 
 
 -- Parsing sentences from input and computing stats.
 
 
-module NLP.FrenchTAG.Stats
+module NLP.Partage4Xmg.Stats
 ( StatCfg (..)
 , statsOn
 
@@ -15,24 +15,24 @@ module NLP.FrenchTAG.Stats
 ) where
 
 
-import           Control.Monad (unless, forM_, when)
-import qualified Control.Monad.State.Strict   as E
+import           Control.Monad              (forM_, unless, when)
+import qualified Control.Monad.State.Strict as E
 
-import qualified Data.Text.Lazy as L
-import qualified Data.Tree as R
-import qualified Data.Set as S
-import qualified Data.Map.Strict as M
-import qualified Data.MemoCombinators as Memo
-import qualified Pipes.Prelude as Pipes
+import qualified Data.Map.Strict            as M
+import qualified Data.MemoCombinators       as Memo
+import qualified Data.Set                   as S
+import qualified Data.Text.Lazy             as L
+import qualified Data.Tree                  as R
 import           Pipes
+import qualified Pipes.Prelude              as Pipes
 
-import qualified NLP.Partage.FactGram.DAG as D
-import qualified NLP.Partage.Earley as Earley
-import qualified NLP.Partage.Earley.Prob.AutoAP as AStar
-import qualified NLP.Partage.Tree.Other as T
+import qualified NLP.Partage.AStar          as AStar
+import qualified NLP.Partage.DAG            as D
+import qualified NLP.Partage.Earley         as Earley
+import qualified NLP.Partage.Tree.Other     as T
 
-import qualified NLP.FrenchTAG.Gen as G
-import qualified NLP.FrenchTAG.Build as B
+import qualified NLP.Partage4Xmg.Build        as B
+import qualified NLP.Partage4Xmg.Gen          as G
 
 
 --------------------------------------------------
@@ -42,13 +42,13 @@ import qualified NLP.FrenchTAG.Build as B
 
 -- | Configuration.
 data StatCfg = StatCfg
-    { maxSize       :: Maybe Int
+    { maxSize     :: Maybe Int
     -- ^ Optional limit on the sentence size
-    , buildCfg      :: B.BuildCfg
+    , buildCfg    :: B.BuildCfg
     -- ^ Grammar construction configuration
-    , startSym      :: String
+    , startSym    :: String
     -- ^ The starting symbol of trees
-    , printParsed   :: Int
+    , printParsed :: Int
     -- ^ Print the set of parsed trees?
     } deriving (Show, Read, Eq, Ord)
 
@@ -65,7 +65,7 @@ longerThan xs (Just n) = length xs > n
 
 
 -- | Produce sentence in the given file.
-sentPipe :: Producer [[G.Term]] IO ()
+sentPipe :: Producer [G.Term] IO ()
 sentPipe = Pipes.stdinLn >-> Pipes.map read
 
 
@@ -76,10 +76,10 @@ sentPipe = Pipes.stdinLn >-> Pipes.map read
 
 -- | Stats for a given sentence length.
 data Stat = Stat
-    { nodeNum   :: Int
-    , edgeNum   :: Int
-    , statNum   :: Int
-    , parsNum   :: Int
+    { nodeNum :: Int
+    , edgeNum :: Int
+    , statNum :: Int
+    , parsNum :: Int
     } deriving (Show, Eq, Ord)
 
 
@@ -157,7 +157,7 @@ statsOn StatCfg{..} gramPath mayLexPath = do
 
     -- | Parse with Earley version.
     parseEarley auto sent = do
-        let input = Earley.fromSets $ map S.fromList sent
+        let input = Earley.fromSets $ map S.singleton sent
         hype <- Earley.earleyAuto auto input
         let treeSet = Earley.parsedTrees hype
                         (L.pack startSym) (length sent)
@@ -198,7 +198,6 @@ parseWei gramPath mayLexPath begSym = do
     runEffect . for sentPipe
         $ liftIO
         . parseAStar auto
-        . map head
 
   where
 

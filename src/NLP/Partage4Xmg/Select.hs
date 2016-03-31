@@ -4,7 +4,7 @@
 -- Extract selected sentences.
 
 
-module NLP.FrenchTAG.Select
+module NLP.Partage4Xmg.Select
 ( select
 , SelectCfg(..)
 ) where
@@ -22,7 +22,7 @@ import qualified Data.Map.Strict as M
 import qualified Pipes.Prelude as Pipes
 import           Pipes
 
-import qualified NLP.FrenchTAG.Gen as G
+import qualified NLP.Partage4Xmg.Gen as G
 
 
 --------------------------------------------------

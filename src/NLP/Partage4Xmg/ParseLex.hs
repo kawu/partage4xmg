@@ -5,7 +5,7 @@
 -- | Lexicon parsers.
 
 
-module NLP.FrenchTAG.ParseLex where
+module NLP.Partage4Xmg.ParseLex where
 
 
 import           Control.Applicative ((*>), (<$>), (<*>),
@@ -24,12 +24,12 @@ import qualified Text.HTML.TagSoup   as TagSoup
 import           Text.XML.PolySoup   hiding (P, Q)
 import qualified Text.XML.PolySoup   as PolySoup
 
-import           NLP.FrenchTAG.Parse (Family)
+import           NLP.Partage4Xmg.Parse (Family)
 
 -- import           NLP.TAG.Vanilla.Core    (View(..))
 
 
--- import           NLP.FrenchTAG.Tree
+-- import           NLP.Partage4Xmg.Tree
 
 
 -------------------------------------------------

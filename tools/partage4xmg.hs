@@ -89,9 +89,8 @@ parseCompression s = return $ case map C.toLower s of
     _           -> B.Auto
 
 
--- dataParser :: Parser (Maybe FilePath)
-dataParser :: Parser B.BuildData
-dataParser = B.BuildData
+buildDataParser :: Parser B.BuildData
+buildDataParser = B.BuildData
   <$> strOption
         ( long "grammar"
        <> short 'g'
@@ -109,19 +108,24 @@ dataParser = B.BuildData
        <> help "Auxiliary grammar/lexicon .xml file" )
 
 
+buildCfgParser :: Parser B.BuildCfg
+buildCfgParser = B.BuildCfg
+  <$> option
+          ( str >>= parseCompression )
+          ( metavar "COMPRESSION-METHOD"
+         <> value B.Auto
+         <> long "compression-method"
+         <> short 'c' )
+  <*> (not <$> switch
+          ( long "no-subtree-sharing"
+         <> short 'n' ))
+
+
+
 buildOptions :: Parser (B.BuildData, B.BuildCfg)
 buildOptions = (,)
-    <$> dataParser
-    <*> ( B.BuildCfg
-        <$> option
-                ( str >>= parseCompression )
-                ( metavar "COMPRESSION-METHOD"
-               <> value B.Auto
-               <> long "compression-method"
-               <> short 'c' )
-        <*> (not <$> switch
-                ( long "no-subtree-sharing"
-               <> short 'n' )) )
+    <$> buildDataParser
+    <*> buildCfgParser
 
 
 --------------------------------------------------
@@ -159,7 +163,7 @@ lexicOptions = Lexicon
 
 genOptions :: Parser Command
 genOptions = Gen
-    <$> dataParser
+    <$> buildDataParser
     <*> option
             auto
             ( metavar "MAX-SIZE"
@@ -175,7 +179,7 @@ genOptions = Gen
 
 genRandOptions :: Parser Command
 genRandOptions = GenRand
-    <$> dataParser
+    <$> buildDataParser
     <*> (G.GenConf
         <$> option
                 auto
@@ -204,7 +208,7 @@ genRandOptions = GenRand
 
 statsOptions :: Parser Command
 statsOptions = Stats
-    <$> dataParser
+    <$> buildDataParser
     <*> (S.StatCfg
           <$> option
                   ( Just <$> auto )
@@ -212,7 +216,7 @@ statsOptions = Stats
                  <> value Nothing
                  <> long "max-size"
                  <> short 'm' )
-          <*> (snd <$> buildOptions)
+          <*> buildCfgParser
           <*> strOption
                 ( metavar "START-SYM"
                <> long "start-sym"
@@ -262,7 +266,7 @@ selectOptions = fmap Select $ S.SelectCfg
 
 astarOptions :: Parser Command
 astarOptions = AStar
-    <$> dataParser
+    <$> buildDataParser
     <*> strOption
         ( long "start-sym"
        <> short 's'
@@ -309,15 +313,15 @@ opts = subparser
                 (progDesc "Parse and print the lexicon")
                 )
         <> command "print"
-            (info (helper <*> (Print <$> dataParser))
+            (info (helper <*> (Print <$> buildDataParser))
                 (progDesc "Parse and print the lexicon")
                 )
         <> command "rules"
-            (info (helper <*> (Rules <$> dataParser))
+            (info (helper <*> (Rules <$> buildDataParser))
                 (progDesc "Print standard rules; experimental mode")
                 )
         <> command "weights"
-            (info (helper <*> (Weights <$> dataParser))
+            (info (helper <*> (Weights <$> buildDataParser))
                 (progDesc "Print weighted rules; experimental mode")
                 )
         <> command "astar"

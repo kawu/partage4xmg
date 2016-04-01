@@ -188,8 +188,9 @@ statsOn StatCfg{..} buildData = do
 parseWei
     :: B.BuildData
     -> String           -- ^ Start symbol
+    -> Bool             -- ^ Show trees?
     -> IO ()
-parseWei buildData begSym = do
+parseWei buildData begSym showTrees = do
     -- extract the grammar and build the automaton
     auto <- AStar.mkAuto termMemo
           . D.mkGram
@@ -221,14 +222,15 @@ parseWei buildData begSym = do
           E.guard (final p)
           liftIO $ do
             putStrLn "<<CHECKPOINT>>" >> printStats hype >> putStrLn ""
-            mapM_
+            when showTrees $ mapM_
               (putStrLn . R.drawTree . fmap show . T.encode . Left)
               (AStar.fromPassive p hype)
           liftIO $ writeIORef contRef False
-        putStrLn "<<FINISH>>" >> printStats hype
-        let ts = AStar.parsedTrees hype (L.pack begSym) sentLen
-        putStr "tree num: " >> print (length ts) >> putStrLn ""
-        mapM_ (putStrLn . R.drawTree . fmap show . T.encode . Left) ts
+        putStrLn "<<FINISH>>" >> printStats hype >> putStrLn ""
+        when showTrees $ do
+          let ts = AStar.parsedTrees hype (L.pack begSym) sentLen
+          putStr "tree num: " >> print (length ts)
+          mapM_ (putStrLn . R.drawTree . fmap show . T.encode . Left) ts
     termMemo = Memo.wrap read show $ Memo.list Memo.char
     printStats hype = do
       putStr "done nodes: " >> print (AStar.doneNodesNum hype)

@@ -44,7 +44,7 @@ data Command
     -- ^ Experimental mode
     | Weights B.BuildData
     -- ^ Print weighted rules
-    | Tmp B.BuildData String
+    | AStar B.BuildData String Bool
     -- ^ Experimental mode
 
 
@@ -256,18 +256,21 @@ selectOptions = fmap Select $ S.SelectCfg
 
 
 --------------------------------------------------
--- Tmp options
+-- AStar options
 --------------------------------------------------
 
 
-tmpOptions :: Parser Command
-tmpOptions = Tmp
+astarOptions :: Parser Command
+astarOptions = AStar
     <$> dataParser
     <*> strOption
         ( long "start-sym"
        <> short 's'
        <> metavar "START-SYM"
        <> help "Start parsing from symbol" )
+    <*> switch
+        ( long "show-trees"
+       <> help "Show parsed trees" )
 
 
 --------------------------------------------------
@@ -317,9 +320,9 @@ opts = subparser
             (info (helper <*> (Weights <$> dataParser))
                 (progDesc "Print weighted rules; experimental mode")
                 )
-        <> command "tmp"
-            (info (helper <*> tmpOptions)
-                (progDesc "Parse with weights; experimental mode")
+        <> command "astar"
+            (info (helper <*> astarOptions)
+                (progDesc "Parse with A*; experimental mode")
                 )
         )
 
@@ -348,8 +351,8 @@ run cmd = case cmd of
          Weights buildData ->
             -- B.printWRules input lexicon
             B.printWeiAuto buildData
-         Tmp buildData begSym ->
-            S.parseWei buildData begSym
+         AStar buildData begSym showTrees ->
+            S.parseWei buildData begSym showTrees
 
 
 main :: IO ()

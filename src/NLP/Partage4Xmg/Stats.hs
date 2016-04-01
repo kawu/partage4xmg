@@ -17,12 +17,14 @@ module NLP.Partage4Xmg.Stats
 
 import           Control.Monad              (forM_, unless, when)
 import qualified Control.Monad.State.Strict as E
+import           Control.Monad.Trans.Maybe
 
 import qualified Data.Map.Strict            as M
 import qualified Data.MemoCombinators       as Memo
 import qualified Data.Set                   as S
 import qualified Data.Text.Lazy             as L
 import qualified Data.Tree                  as R
+import Data.IORef
 import           Pipes
 import qualified Pipes.Prelude              as Pipes
 
@@ -205,10 +207,34 @@ parseWei buildData begSym = do
     parseAStar :: AStar.Auto G.NonTerm G.Term -> [G.Term] -> IO ()
     parseAStar auto sent = do
         let input = AStar.fromList sent
-        b <- AStar.recognizeFromAuto
-                auto (L.pack begSym) input
-        putStrLn  $ ">>> " ++ show b
+            pipe = AStar.earleyAutoP auto input
+            sentLen = length sent
+            final p = AStar._spanP p == AStar.Span 0 sentLen Nothing
+                   && AStar._dagID p == Left (L.pack begSym)
+        -- b <- AStar.recognizeFromAuto
+        --         auto (L.pack begSym) input
+        -- putStrLn  $ ">>> " ++ show b
+        contRef <- newIORef True
+        hype <- runEffect . for pipe $ \(item, hype) -> void . runMaybeT $ do
+          E.guard =<< liftIO (readIORef contRef)
+          AStar.ItemP p <- return item
+          E.guard (final p)
+          liftIO $ do
+            putStrLn "<<CHECKPOINT>>" >> printStats hype >> putStrLn ""
+            mapM_
+              (putStrLn . R.drawTree . fmap show . T.encode . Left)
+              (AStar.fromPassive p hype)
+          liftIO $ writeIORef contRef False
+        putStrLn "<<FINISH>>" >> printStats hype
+        let ts = AStar.parsedTrees hype (L.pack begSym) sentLen
+        putStr "tree num: " >> print (length ts) >> putStrLn ""
+        mapM_ (putStrLn . R.drawTree . fmap show . T.encode . Left) ts
     termMemo = Memo.wrap read show $ Memo.list Memo.char
+    printStats hype = do
+      putStr "done nodes: " >> print (AStar.doneNodesNum hype)
+      putStr "done edges: " >> print (AStar.doneEdgesNum hype)
+      putStr "waiting nodes: " >> print (AStar.waitingNodesNum hype)
+      putStr "waiting edges: " >> print (AStar.waitingEdgesNum hype)
 
 
 --------------------------------------------------

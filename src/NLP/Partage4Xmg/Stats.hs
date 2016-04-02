@@ -226,10 +226,10 @@ parseWei buildData begSym showTrees = do
               (putStrLn . R.drawTree . fmap show . T.encode . Left)
               (AStar.fromPassive p hype)
           liftIO $ writeIORef contRef False
-        putStrLn "<<FINISH>>" >> printStats hype >> putStrLn ""
-        when showTrees $ do
-          let ts = AStar.parsedTrees hype (L.pack begSym) sentLen
-          putStr "tree num: " >> print (length ts)
+        putStrLn "<<FINISH>>" >> printStats hype
+        let ts = AStar.parsedTrees hype (L.pack begSym) sentLen
+        putStr "tree num: " >> print (length ts)  >> putStrLn ""
+        when showTrees $
           mapM_ (putStrLn . R.drawTree . fmap show . T.encode . Left) ts
     termMemo = Memo.wrap read show $ Memo.list Memo.char
     printStats hype = do

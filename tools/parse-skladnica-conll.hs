@@ -45,25 +45,46 @@ parse =
 data Term x = Term x deriving (Show)
 
 
+-- | Process the list (custom scanning function).
+process :: ([a] -> Maybe (b, [a])) -> [a] -> [b]
+process f xs = case f xs of
+  Nothing -> []
+  Just (y, xs') -> y : process f xs'
+
+
 -- | Convert lemma to a grammar-consistent form .
 --
 -- TODO:
 --
 --   * ... -> "dots"
-convertWord :: L.Text -> L.Text
-convertWord "," = "comma"
-convertWord "." = "fullstop"
-convertWord "?" = "qmark"
-convertWord "!" = "excl"
-convertWord ";" = "semicol"
-convertWord x   = x
+convertWord :: [L.Text] -> Maybe (L.Text, [L.Text])
+convertWord l = case l of
+  [] -> Nothing
+  "." : "." : "." : t -> Just ("dots", t)
+  "." : t -> Just ("fullstop", t)
+  "," : t -> Just ("comma", t)
+  "?" : t -> Just ("qmark", t)
+  "!" : t -> Just ("excl", t)
+  ";" : t -> Just ("semicol", t)
+  "-" : t -> Just ("hyph", t)
+  x   : t -> Just (x, t)
+
+-- convertWord :: L.Text -> L.Text
+-- convertWord "," = "comma"
+-- convertWord "." = "fullstop"
+-- convertWord "?" = "qmark"
+-- convertWord "!" = "excl"
+-- convertWord ";" = "semicol"
+-- convertWord "-" = "hyph"
+-- convertWord x   = x
 
 
 -- | Convert the sentence to a form appropriate for parsing.
 convert :: Sentence -> [Term L.Text]
 convert
-    = map (\x -> Term (convertWord x))
-    . map (V.!2)
+    -- = map (\x -> Term (convertWord x))
+    = map Term . process convertWord
+    . map (V.! 2)
     . V.toList
 
 -------------------------------------------------

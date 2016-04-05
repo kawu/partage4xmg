@@ -224,13 +224,15 @@ parseWei buildData begSym showTrees = do
             putStrLn "<<CHECKPOINT>>" >> printStats hype >> putStrLn ""
             when showTrees $ mapM_
               (putStrLn . R.drawTree . fmap show . T.encode . Left)
-              (AStar.fromPassive p hype)
+              (nubOrd $ AStar.fromPassive p hype)
           liftIO $ writeIORef contRef False
         putStrLn "<<FINISH>>" >> printStats hype
         let ts = AStar.parsedTrees hype (L.pack begSym) sentLen
-        putStr "tree num: " >> print (length ts)  >> putStrLn ""
-        when showTrees $
-          mapM_ (putStrLn . R.drawTree . fmap show . T.encode . Left) ts
+        putStr "deriv num: " >> print (length ts)
+        putStr "tree num: "  >> print (length $ nubOrd ts)  >> putStrLn ""
+        when showTrees $ mapM_
+          (putStrLn . R.drawTree . fmap show . T.encode . Left)
+          (nubOrd ts)
     termMemo = Memo.wrap read show $ Memo.list Memo.char
     printStats hype = do
       putStr "done nodes: " >> print (AStar.doneNodesNum hype)
@@ -246,3 +248,7 @@ parseWei buildData begSym showTrees = do
 
 divide :: (Integral a, Integral b) => a -> b -> Double
 divide x y = (fromIntegral x :: Double) / fromIntegral y
+
+
+nubOrd :: (Ord a) => [a] -> [a]
+nubOrd = S.toList . S.fromList

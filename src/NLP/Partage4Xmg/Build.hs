@@ -25,12 +25,14 @@ module NLP.Partage4Xmg.Build
 , printRules
 , printWRules
 , getTrees
+, printTrees
 ) where
 
 
 import           Data.Maybe (fromJust)
 import qualified Data.Set as S
 import qualified Data.Map.Strict as M
+import qualified Data.Tree as R
 
 import qualified NLP.Partage.Tree.Other as O
 import qualified NLP.Partage.DAG as DAG
@@ -85,7 +87,6 @@ data BuildCfg = BuildCfg
     -- ^ Compression level
     , shareTrees    :: Bool
     -- ^ Subtree sharing
-    -- TODO: this is ignored now!
     } deriving (Show, Read, Eq, Ord)
 
 
@@ -107,7 +108,7 @@ buildAuto
     -> IO (DAG, Auto)
 buildAuto BuildCfg{..} buildData = do
     -- extract the grammar
-    gram <- buildGram buildData
+    gram <- buildGram shareTrees buildData
     let fromGram = case compLevel of
             Auto -> DAWG.fromGram
             Trie -> Trie.fromGram
@@ -198,13 +199,13 @@ getTrees BuildData{..} = do
 
 -- | Get weighted rules from the given grammar.
 buildGram
-    -- :: FilePath         -- ^ Grammar
-    -- -> Maybe FilePath   -- ^ Lexicon (if present)
-    :: BuildData
+    :: Bool       -- ^ Share trees
+    -> BuildData
     -> IO Gram
-buildGram buildData = do
+buildGram shareTrees buildData = do
   ts  <- getTrees buildData
-  return . DAG.mkGram . map (,0) . S.toList $ ts
+  let mkGram = if shareTrees then DAG.mkGram else DAG.mkDummy
+  return . mkGram . map (,0) . S.toList $ ts
 
 
 -- | First `buildRules` and then print them.
@@ -214,7 +215,7 @@ printRules
     :: BuildData
     -> IO ()
 printRules buildData = do
-    gram <- buildGram buildData
+    gram <- buildGram True buildData
     let dag = DAG.dagGram gram
         ruleSet = DAG.factGram gram
     -- mapM_ print $ M.toList (DAG.nodeMap dag)
@@ -223,6 +224,17 @@ printRules buildData = do
      (S.toList (DAG.nodeSet dag))
     putStrLn "============"
     mapM_ print (M.toList ruleSet)
+
+
+-- | Print grammar trees after removing FSs.
+printTrees :: BuildData -> IO ()
+printTrees buildData = do
+   ts <- getTrees buildData
+   mapM_
+    (putStrLn . R.drawTree . fmap show)
+    (S.toList ts)
+   putStrLn ""
+   putStrLn "TREE NUM: " >> print (S.size ts)
 
 
 --------------------------------------------------

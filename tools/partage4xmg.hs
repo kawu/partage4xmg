@@ -27,6 +27,8 @@ data Command
     -- | Parse -- ParseOptions
     | Parse FilePath
     -- ^ Only parse and show the input grammar
+    | Trees B.BuildData
+    -- ^ Only parse and show elementary grammar trees, with no FSs
     | Gen B.BuildData Int
     -- ^ Generate size-bounded derived trees
     | GenRand B.BuildData G.GenConf
@@ -292,6 +294,10 @@ opts = subparser
             (info (helper <*> parseOptions)
                 (progDesc "Parse the input grammar file")
                 )
+        <> command "trees"
+            (info (helper <*> (Trees <$> buildDataParser))
+                (progDesc "Show elementary trees, no FSs")
+                )
         <> command "gen"
             (info (helper <*> genOptions)
                 (progDesc "Generate trees based on input grammar file")
@@ -336,6 +342,8 @@ run :: Command -> IO ()
 run cmd = case cmd of
          Build buildData cfg ->
             B.printAuto cfg buildData
+         Trees buildData ->
+            B.printTrees buildData
          Parse grammarPath ->
             P.printGrammar grammarPath
          Print B.BuildData{..} ->

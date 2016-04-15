@@ -191,22 +191,35 @@ parseWei
     -> Bool             -- ^ Show trees?
     -> IO ()
 parseWei buildData begSym showTrees = do
+    putStrLn "<<ELEMENTARY TREES>>"
+    _ts <- S.toList <$> B.getTrees buildData
+    mapM_  (putStrLn . R.drawTree . fmap show) _ts
     -- extract the grammar and build the automaton
-    auto <- AStar.mkAuto termMemo
-          . D.mkGram
-          . map (,1)
-          . S.toList
-        <$> B.getTrees buildData
+    gram <- D.mkGram
+           . map (,1)
+           . S.toList
+         <$> B.getTrees buildData
+    putStrLn "<<DAG>>"
+    let dag = D.dagGram gram
+        toTree i = case D.toTree i dag of
+          Nothing -> error "CARABANDA"
+          Just t  -> t
+        printDID i = do
+          putStr "## " >> putStr (show i) >> putStrLn "##"
+          putStrLn . R.drawTree . fmap show . toTree $ i
+    mapM_ printDID (S.toList $ D.rootSet dag)
+    putStrLn "<<PARSING>>"
+    let auto = AStar.mkAuto termMemo gram
     -- read sentences from input
     runEffect . for sentPipe
         $ liftIO
-        . parseAStar auto
+        . parseAStar dag auto
 
   where
 
     -- | Parse with Prob.AutoAP (A*) version.
-    parseAStar :: AStar.Auto G.NonTerm G.Term -> [G.Term] -> IO ()
-    parseAStar auto sent = do
+    -- parseAStar :: AStar.Auto G.NonTerm G.Term -> [G.Term] -> IO ()
+    parseAStar dag auto sent = do
         let input = AStar.fromList sent
             pipe = AStar.earleyAutoP auto input
             sentLen = length sent
@@ -233,6 +246,11 @@ parseWei buildData begSym showTrees = do
         when showTrees $ mapM_
           (putStrLn . R.drawTree . fmap show . T.encode . Left)
           (nubOrd ts)
+        putStrLn "<<DERIVATIONS>>"
+        when showTrees $ do
+          ds <- AStar.derivTrees hype (L.pack begSym) input
+          let ds' = map (AStar.expandDeriv dag . AStar.deriv2tree) (S.toList ds)
+          mapM_ (putStrLn . R.drawTree . fmap show) ds'
     termMemo = Memo.wrap read show $ Memo.list Memo.char
     printStats hype = do
       putStr "done nodes: " >> print (AStar.doneNodesNum hype)

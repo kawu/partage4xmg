@@ -31,6 +31,7 @@ library
       , mtl                 >= 2.1      && < 2.3
       , pipes               >= 4.1      && < 4.2
       , random              >= 1.0      && < 2.0
+      , timeit              >= 1.0      && < 1.1
 
     exposed-modules:
         NLP.Partage4Xmg.Parse

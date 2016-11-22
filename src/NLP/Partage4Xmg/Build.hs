@@ -2,50 +2,45 @@
 {-# LANGUAGE TupleSections #-}
 
 
--- Build automaton.
+-- | Building grammar automaton.
 
 
 module NLP.Partage4Xmg.Build
 (
--- * Config
-  BuildCfg (..)
-, Compress (..)
+-- * Types
+  Term
+, NonTerm
 
 -- * Build
 , BuildData (..)
 , Auto
 , buildAuto
 , printAuto
--- ** Weighted
-, WeiAuto
-, buildWeiAuto
-, printWeiAuto
 
 -- * Temp
 , printRules
-, printWRules
 , getTrees
 , printTrees
 ) where
 
 
+import qualified Control.Monad.State.Strict as E
+
 import           Data.Maybe (fromJust)
+import qualified Data.Text as T
+import qualified Data.Text.Lazy as L
 import qualified Data.Set as S
 import qualified Data.Map.Strict as M
 import qualified Data.Tree as R
 
 import qualified NLP.Partage.Tree.Other as O
+import qualified NLP.Partage.Tree.Comp as C
 import qualified NLP.Partage.DAG as DAG
--- import qualified NLP.Partage.FactGram.Weighted as W
--- import qualified NLP.Partage.SubtreeSharing as LS
 import qualified NLP.Partage.Auto as Auto
-import qualified NLP.Partage.Auto.DAWG as DAWG
 import qualified NLP.Partage.Auto.Trie as Trie
-import qualified NLP.Partage.Auto.WeiTrie as WeiTrie
-import qualified NLP.Partage.Auto.List as List
-import qualified NLP.Partage.Auto.Set  as Set
 
-import qualified NLP.Partage4Xmg.Gen as G
+import qualified NLP.Partage4Xmg.Parse as P
+import qualified NLP.Partage4Xmg.ParseLex as PL
 
 
 --------------------------------------------------
@@ -55,39 +50,49 @@ import qualified NLP.Partage4Xmg.Gen as G
 
 -- | Building data sources.
 data BuildData = BuildData
-    { gramPath     :: FilePath
+    { gramPath   :: FilePath
     -- ^ Grammar with anchors
-    , mayLexPath   :: Maybe FilePath
-    -- ^ Lexicon (if present) defined w.r.t. the grammar
-    , mayAuxPath   :: Maybe FilePath
+    , lexPath    :: FilePath
+    -- ^ Lexicon defined for the grammar
+    , mayAuxPath :: Maybe FilePath
     -- ^ Auxiliary grammar/lexicon file, no anchors
     } deriving (Show, Read, Eq, Ord)
 
 
+--------------------------------------------------
+-- Types
+--------------------------------------------------
 
 
--- | Compression method selection.
-data Compress
-    = Auto
-    -- ^ Minimal automaton
-    | Trie
-    -- ^ Prefix trie
-    | List
-    -- ^ List of lists
-    | SetAuto
-    -- ^ Set of automata, one per rule head symbol
-    | SetTrie
-    -- ^ Set of tries, one per rule head symbol
+-- | Terminal in the grammar is either a normal terminal or a node
+-- attached to a non-terminal anchor.
+data Term
+    = Term T.Text
+    | Anchor T.Text
     deriving (Show, Read, Eq, Ord)
 
 
--- | Building configuration.
-data BuildCfg = BuildCfg
-    { compLevel     :: Compress
-    -- ^ Compression level
-    , shareTrees    :: Bool
-    -- ^ Subtree sharing
-    } deriving (Show, Read, Eq, Ord)
+-- | Non-terminal is just as in the original grammar.
+type NonTerm = T.Text
+
+
+-- | Type of the node in TAG trees.
+type Node = O.Node NonTerm Term
+
+
+-- | The tree itself.
+type Tree = R.Tree Node
+
+
+-- | Show the given tree.
+showTree :: Tree -> String
+showTree = R.drawTree . fmap show
+
+
+-- | Local automaton verion.
+type Auto = Auto.GramAuto
+type DAG  = DAG.DAG Node (C.Comp ())
+type Gram = DAG.Gram NonTerm Term (C.Comp ())
 
 
 --------------------------------------------------
@@ -95,69 +100,23 @@ data BuildCfg = BuildCfg
 --------------------------------------------------
 
 
--- | Local automaton verion.
-type Auto = Auto.GramAuto -- G.NonTerm G.Term
-type DAG  = DAG.DAG (O.Node G.NonTerm G.Term) DAG.Weight
-type Gram = DAG.Gram G.NonTerm G.Term
-
-
--- | Build automaton using the specified compression technique.
-buildAuto
-    :: BuildCfg
-    -> BuildData
-    -> IO (DAG, Auto)
-buildAuto BuildCfg{..} buildData = do
-    -- extract the grammar
-    gram <- buildGram shareTrees buildData
-    let fromGram = case compLevel of
-            Auto -> DAWG.fromGram
-            Trie -> Trie.fromGram
-            List -> List.fromGram
-            SetAuto -> Set.fromGram DAWG.fromGram
-            SetTrie -> Set.fromGram Trie.fromGram
-    return
-      ( DAG.dagGram gram
-      , fromGram . M.keysSet $ DAG.factGram gram )
+-- | Build automaton based on input data.
+buildAuto :: BuildData -> IO (DAG, Auto)
+buildAuto buildData = do
+    gram <- buildGram buildData
+    let dag = DAG.dagGram gram
+        trie = Trie.fromGram (DAG.factGram gram)
+    return (dag, trie)
 
 
 -- | Build automaton and print the individual edges.
-printAuto :: BuildCfg -> BuildData -> IO ()
-printAuto cfg buildData = do
-    auto <- snd <$> buildAuto cfg buildData
+printAuto :: BuildData -> IO ()
+printAuto buildData = do
+    auto <- snd <$> buildAuto buildData
     mapM_ print (Auto.allEdges auto)
     putStrLn "\n# Maximum numbers of passive and active items per span #\n"
     putStr "#(PI): " >> print (numberPI auto)
     putStr "#(AI): " >> print (numberAI auto)
-
-
---------------------------------------------------
--- Weighted Automaton Contruction
---------------------------------------------------
-
-
--- | Local automaton verion.
-type WeiAuto = Auto.WeiGramAuto G.NonTerm G.Term
-
-
--- | Build weighted automaton.
-buildWeiAuto
-    -- :: FilePath         -- ^ Grammar
-    -- -> Maybe FilePath   -- ^ Lexicon (if present)
-    :: BuildData
-    -> IO WeiAuto
-buildWeiAuto buildData = do
-    ruleSet <- buildWRules buildData
-    return (WeiTrie.fromGram ruleSet)
-
-
--- | Build automaton and print the individual edges.
-printWeiAuto :: BuildData -> IO ()
-printWeiAuto buildData = do
-    weiAuto <- buildWeiAuto buildData
-    let auto = Auto.fromWei weiAuto
-    mapM_ print $
-        [ (i, x, j, fst . fromJust $ Auto.followWei weiAuto i x)
-        | (i, x, j) <- Auto.allEdges auto ]
 
 
 --------------------------------------------------
@@ -166,13 +125,13 @@ printWeiAuto buildData = do
 
 
 -- | Maximum possible number of passive items per span.
-numberPI :: Auto.GramAuto -> Int
+numberPI :: Auto -> Int
 numberPI auto = S.size $ S.fromList
     [x | (_, Auto.Head x, _) <- Auto.allEdges auto]
 
 
 -- | Maximum possible number of active items per span.
-numberAI :: Auto.GramAuto -> Int
+numberAI :: Auto -> Int
 numberAI auto = S.size $ S.fromList
     [i | (i, Auto.Body _, _) <- Auto.allEdges auto]
 
@@ -182,48 +141,41 @@ numberAI auto = S.size $ S.fromList
 --------------------------------------------------
 
 
--- | Weighted rule, local type.
-type Rule = DAG.Rule -- G.NonTerm G.Term
+-- -- | Weighted rule, local type.
+-- type Rule = DAG.Rule -- G.NonTerm G.Term
 
 
 -- | Get trees for the given data sources.
-getTrees :: BuildData -> IO (S.Set G.Tree)
+getTrees :: BuildData -> IO (S.Set Tree)
 getTrees BuildData{..} = do
   -- extract the trees
-  ts  <- G.getTrees gramPath mayLexPath
+  ts  <- getLexTrees gramPath lexPath
   ts' <- case mayAuxPath of
     Nothing -> return S.empty
-    Just auxPath -> G.getTrees auxPath Nothing
+    Just auxPath -> getAncTrees auxPath
   return $ ts `S.union` ts'
 
 
--- | Get weighted rules from the given grammar.
-buildGram
-    :: Bool       -- ^ Share trees
-    -> BuildData
-    -> IO Gram
-buildGram shareTrees buildData = do
-  ts  <- getTrees buildData
-  let mkGram = if shareTrees then DAG.mkGram else DAG.mkDummy
-  return . mkGram . map (,0) . S.toList $ ts
+-- | Get rules from the given grammar.
+buildGram :: BuildData -> IO Gram
+buildGram buildData = do
+  ts <- getTrees buildData
+  let dummy t = Just ()
+  return . DAG.mkGram . map (,dummy) . S.toList $ ts
 
 
 -- | First `buildRules` and then print them.
-printRules
-    -- :: FilePath         -- ^ Grammar
-    -- -> Maybe FilePath   -- ^ Lexicon (if present)
-    :: BuildData
-    -> IO ()
+printRules :: BuildData -> IO ()
 printRules buildData = do
-    gram <- buildGram True buildData
+    gram <- buildGram buildData
     let dag = DAG.dagGram gram
         ruleSet = DAG.factGram gram
     -- mapM_ print $ M.toList (DAG.nodeMap dag)
     mapM_
-     (\i -> print (i, DAG.label i dag, DAG.value i dag, DAG.edges i dag))
+     (\i -> print (i, DAG.label i dag, DAG.edges i dag))
      (S.toList (DAG.nodeSet dag))
     putStrLn "============"
-    mapM_ print (M.toList ruleSet)
+    mapM_ print (S.toList ruleSet)
 
 
 -- | Print grammar trees after removing FSs.
@@ -238,35 +190,95 @@ printTrees buildData = do
 
 
 --------------------------------------------------
--- Provisional section: weights
+-- Grammar extraction
 --------------------------------------------------
 
 
----- | Weighted rule, local type.
---type WRule = W.Rule G.NonTerm G.Term W.Weight
+-- -- | `getAncTrees` or `getLexTrees`, depending on arguments.
+-- getTrees
+--     :: FilePath         -- ^ Grammar
+--     -> Maybe FilePath   -- ^ Lexicon (if present)
+--     -> IO (S.Set Tree)
+-- getTrees gramPath Nothing =
+--     getAncTrees gramPath
+-- getTrees gramPath (Just lexPath) =
+--     getLexTrees gramPath lexPath
 
 
--- | Get weighted rules from the given grammar.
-buildWRules
-    -- :: FilePath         -- ^ Grammar
-    -- -> Maybe FilePath   -- ^ Lexicon (if present)
-    :: BuildData
-    -> IO (M.Map Rule DAG.Weight)
-buildWRules buildData = do
-  ts <- getTrees buildData
-  return
-      . DAG.rulesMapFromDAG
-      . DAG.dagFromWeightedForest
-      . map (,1)
-      . S.toList $ ts
+-- | Get the set of lexicalized TAG trees given the grammar file and
+-- the lexicon file.
+getLexTrees
+    :: FilePath     -- ^ Grammar
+    -> FilePath     -- ^ Lexicon
+    -> IO (S.Set Tree)
+getLexTrees gramPath lexPath = do
+    treeMap <- getTreeMap gramPath
+    lemmas  <- PL.readLexicon lexPath
+    let treeList =
+          [ anchor (L.toStrict $ PL.name lemma) tree
+          | lemma  <- lemmas
+          , family <- S.toList $ PL.treeFams lemma
+          , tree   <- maybe [] S.toList (M.lookup family treeMap) ]
+    flip E.execStateT S.empty $ E.forM_ treeList $ \tree -> do
+        length (showTree tree) `seq`
+            E.modify (S.insert tree)
 
 
--- | First `buildWRules` and then print them.
-printWRules
-    -- :: FilePath         -- ^ Grammar
-    -- -> Maybe FilePath   -- ^ Lexicon (if present)
-    :: BuildData
-    -> IO ()
-printWRules buildData = do
-    ruleMap <- buildWRules buildData
-    mapM_ print (M.toList ruleMap)
+-- | Get the set of TAG trees with anchors. Useful when lexicon is not there.
+getAncTrees
+    :: FilePath         -- ^ Grammar
+    -> IO (S.Set Tree)
+getAncTrees path = do
+    ts <- P.readGrammar path
+    flip E.execStateT S.empty $ E.forM_ ts $ \(_family, tree) -> do
+        let tree' = convert tree
+        -- Rather nasty trick, but works.  Otherwise the tree is
+        -- not constructed at this precise moment.  Find a better
+        -- solution.
+        length (showTree tree') `seq`
+            E.modify (S.insert tree')
+
+
+-- | Get the set of TAG trees.
+getTreeMap :: FilePath -> IO (M.Map P.Family (S.Set Tree))
+getTreeMap path = do
+    ts <- P.readGrammar path
+    flip E.execStateT M.empty $ E.forM_ ts $ \(family, tree) -> do
+        let tree' = convert tree
+        -- Rather nasty trick, but works.  Otherwise the tree is
+        -- not constructed at this precise moment.  Find a better
+        -- solution.
+        length (showTree tree') `seq`
+            E.modify (M.insertWith S.union family
+                (S.singleton tree'))
+
+
+-------------------------------------------------
+-- Tree conversion
+-------------------------------------------------
+
+
+-- | Convert the parsed tree to the required form.
+convert :: P.Tree -> Tree
+convert (R.Node P.NonTerm{..} xs) =
+  case typ of
+    P.Std       -> below $ O.NonTerm sym'
+    P.Foot      -> leaf  $ O.Foot sym'
+    P.Anchor    -> R.Node (O.NonTerm sym')
+      [leaf . O.Term $ Anchor sym']
+    P.Lex       -> leaf  . O.Term $ Term sym'
+    P.Other _   -> below $ O.NonTerm sym'
+  where
+    below x = R.Node x $ map convert xs
+    leaf x  = R.Node x []
+    sym' = L.toStrict sym
+
+
+-- | Anchor the given tree with the given terminal.
+anchor :: T.Text -> Tree -> Tree
+anchor a (R.Node n xs) = case n of
+  O.NonTerm x -> R.Node (O.NonTerm x) (map (anchor a) xs)
+  O.Foot x    -> R.Node (O.Foot x) []
+  O.Term t    -> case t of
+    Term _   -> R.Node (O.Term t) []
+    Anchor _ -> R.Node (O.Term (Term a)) []

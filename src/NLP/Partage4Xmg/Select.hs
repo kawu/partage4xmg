@@ -1,7 +1,7 @@
 {-# LANGUAGE RecordWildCards #-}
 
 
--- Extract selected sentences.
+-- | Extract selected sentences.
 
 
 module NLP.Partage4Xmg.Select

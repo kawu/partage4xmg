@@ -112,7 +112,7 @@ grammarQ = concat <$> (true //> entryQ)
 
 -- | Entry parser (family + one or more trees).
 entryQ :: Q [(Family, Tree)]
-entryQ = named "entry" `joinR` do 
+entryQ = named "entry" `joinR` do
     famName <- first familyQ
     trees <- every' treeQ
     return [(famName, t) | t <- trees]

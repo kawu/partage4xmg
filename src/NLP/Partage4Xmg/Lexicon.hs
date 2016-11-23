@@ -42,15 +42,28 @@ type P a = PolySoup.P (XmlTree L.Text) a
 type Q a = PolySoup.Q (XmlTree L.Text) a
 
 
--- | Lexicon entry.
+-- | Lemma.
 data Lemma = Lemma
     { name :: L.Text
-    -- ^ Name of the lemma (i.e. the lemma itself)
+      -- ^ Name of the lemma (i.e. the lemma itself)
     , cat :: L.Text
-    -- ^ Lemma category (e.g. "subst")
-    , treeFams :: S.Set Family
-    -- ^ Families of which the lemma can be an anchor
-    } deriving (Show)
+      -- ^ Lemma category (e.g. "subst")
+    } deriving (Show, Eq, Ord)
+
+
+-- | Lexicon entry.
+type Entry = (Lemma, S.Set Family)
+
+
+-- -- | Lexicon entry.
+-- data Lemma = Lemma
+--     { name :: L.Text
+--     -- ^ Name of the lemma (i.e. the lemma itself)
+--     , cat :: L.Text
+--     -- ^ Lemma category (e.g. "subst")
+--     , treeFams :: S.Set Family
+--     -- ^ Families of which the lemma can be an anchor
+--     } deriving (Show)
 
 
 -------------------------------------------------
@@ -59,20 +72,22 @@ data Lemma = Lemma
 
 
 -- | Lexicon parser.
-lexiconP :: P [Lemma]
+lexiconP :: P [Entry]
 lexiconP = concat <$> every' lexiconQ
 
 
 -- | Lexicon parser.
-lexiconQ :: Q [Lemma]
+lexiconQ :: Q [Entry]
 lexiconQ = true //> lemmaQ
 
 
 -- | Entry parser (family + one or more trees).
-lemmaQ :: Q Lemma
+lemmaQ :: Q Entry
 lemmaQ = (named "lemma" *> nameCat) `join` \(nam, cat') -> do
-    Lemma nam cat' . S.fromList <$>
-        every' (node famNameQ)
+  let lemma = Lemma nam cat'
+  famSet <- S.fromList <$>
+    every' (node famNameQ)
+  return (lemma, famSet)
   where
     nameCat = (,) <$> attr "name" <*> attr "cat"
     famNameQ = getFamName <$> (named "anchor" *> attr "tree_id")
@@ -88,13 +103,13 @@ getFamName x = case L.stripPrefix "family[@name=" x of
 
 
 -- | Parse textual contents of the French TAG XML file.
-parseLexicon :: L.Text -> [Lemma]
+parseLexicon :: L.Text -> [Entry]
 parseLexicon =
     F.concat . evalP lexiconP . parseForest . TagSoup.parseTags
 
 
 -- | Parse the stand-alone French TAG xml file.
-readLexicon :: FilePath -> IO [Lemma]
+readLexicon :: FilePath -> IO [Entry]
 readLexicon path = parseLexicon <$> L.readFile path
 
 

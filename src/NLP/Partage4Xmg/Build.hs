@@ -217,8 +217,8 @@ getLexTrees gramPath lexPath = do
     lemmas  <- PL.readLexicon lexPath
     let treeList =
           [ anchor (L.toStrict $ PL.name lemma) tree
-          | lemma  <- lemmas
-          , family <- S.toList $ PL.treeFams lemma
+          | (lemma, famSet) <- lemmas
+          , family <- S.toList famSet
           , tree   <- maybe [] S.toList (M.lookup family treeMap) ]
     flip E.execStateT S.empty $ E.forM_ treeList $ \tree -> do
         length (showTree tree) `seq`

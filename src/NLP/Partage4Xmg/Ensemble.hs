@@ -9,6 +9,8 @@ module NLP.Partage4Xmg.Ensemble
 , Tree
 , getInterps
 , getTrees
+, getTreesFS
+, closeAVM
 
 -- * Reading
 , GramCfg(..)
@@ -16,10 +18,12 @@ module NLP.Partage4Xmg.Ensemble
 ) where
 
 
+-- import Debug.Trace (trace)
+
 import           Control.Arrow              (first, second)
 import qualified Control.Monad.State.Strict as E
 
-import           Data.Maybe                 (maybeToList)
+import           Data.Maybe                 (maybeToList, mapMaybe)
 import qualified Data.Map.Strict            as M
 import qualified Data.Set                   as S
 import qualified Data.Text                  as T
@@ -33,6 +37,7 @@ import qualified Pipes.Prelude              as P
 import qualified NLP.Partage.DAG            as D
 import qualified NLP.Partage.Earley         as Earley
 import qualified NLP.Partage.Tree.Other     as O
+import qualified NLP.Partage.Tree.Comp      as C
 import qualified NLP.Partage.Env            as Env
 import qualified NLP.Partage.FS             as FS
 import qualified NLP.Partage.FSTree         as FSTree
@@ -49,38 +54,64 @@ import qualified NLP.Partage4Xmg.Grammar    as G
 
 -- | All the components of a grammar.
 data Grammar = Grammar
-  { morphMap :: M.Map L.Text (S.Set Morph.LemmaRef)
-  , lexMap   :: M.Map Morph.LemmaRef (S.Set G.Family)
+  { morphMap :: M.Map L.Text (S.Set Morph.Ana)
+  , lexMap   :: M.Map Lex.Lemma (S.Set G.Family)
   , treeMap  :: M.Map G.Family (S.Set G.Tree)
   }
 
 
 -- | Map a given word to the set of its possible interpretations.
-getInterps :: Grammar -> L.Text -> S.Set Morph.LemmaRef
+getInterps :: Grammar -> L.Text -> S.Set Morph.Ana
 getInterps Grammar{..} orth = case M.lookup orth morphMap of
   Nothing -> S.empty
   Just x  -> x
 
 
 -- | Retrieve the set of grammar trees related to te given interpretation.
-_getTrees :: Grammar -> Morph.LemmaRef -> S.Set G.Tree
-_getTrees Grammar{..} lemmaRef = S.unions
+_getTrees :: Grammar -> Morph.Ana -> S.Set G.Tree
+_getTrees Grammar{..} ana = S.unions
   [ treeSet
-  | famSet <- maybeToList $ M.lookup lemmaRef lexMap
+  | famSet <- maybeToList $ M.lookup (Morph.lemma ana) lexMap
   , family <- S.toList famSet
   , treeSet <- maybeToList $ M.lookup family treeMap
   ]
 
 
 -- | Retrieve the set of grammar trees related to te given interpretation.
-getTrees :: Grammar -> Morph.LemmaRef -> S.Set (Tree T.Text)
-getTrees gram lemmaRef
-  = S.fromList
-  . map simplify
-  . map (anchor . L.toStrict $ Morph.name lemmaRef)
+getTrees :: Grammar -> Morph.Ana -> [Tree Term]
+getTrees gram ana
+  = map simplify
+  . map (anchor . L.toStrict . Lex.name $ Morph.lemma ana)
   . map convert
   . S.toList
-  $ _getTrees gram lemmaRef
+  $ _getTrees gram ana
+
+
+-- | Retrieve the set of FS-aware grammar trees related to te given interpretation.
+getTreesFS
+  :: Grammar
+  -> Morph.Ana
+  -> [ ( Tree Term
+       , C.Comp (FS.ClosedFS Key Val) )
+     ]
+getTreesFS gram ana
+  = mapMaybe process
+  . S.toList
+  $ _getTrees gram ana
+  where
+    process tree = splitFSTree . fmap simplifyFS $ do
+      let term = L.toStrict (Lex.name $ Morph.lemma ana)
+      converted <- E.evalStateT (convertFS tree) M.empty
+      let fs = closeAVM (Morph.avm ana)
+      anchorFS term fs converted
+
+
+-- | Close the given XMG AVM.  Makes sense only if we know that
+-- variables of this AVM are not shared with other AVMs.
+closeAVM :: G.AVM -> FS.ClosedFS Key Val
+closeAVM avm = maybe [] id . fst . Env.runEnvM $ do
+  fs <- E.evalStateT (convertAVM avm) M.empty
+  FS.close fs
 
 
 --------------------------------------------------
@@ -106,9 +137,7 @@ readGrammar GramCfg{..} = do
     { morphMap = M.fromList
       [ (Morph.wordform x, Morph.analyzes x)
       | x <- xs ]
-    , lexMap = M.fromList
-      [ (Morph.LemmaRef {name = name, cat = cat}, treeFams)
-      | Lex.Lemma{..} <- ys ]
+    , lexMap = M.fromList ys
     , treeMap = M.fromListWith S.union
       [ (famName, S.singleton tree)
       | (famName, tree) <- zs ]
@@ -255,13 +284,17 @@ convertAVM avm = fmap M.fromList . runListT $ do
       return (key, FS.Var var)
 
 
--- | Retrieve the corresponding environment variable.
+-- | Retrieve the corresponding environment variable. Create a new one if the
+-- XMG variable was not seen previously.
 varFor :: G.Var -> E.StateT VarMap (Env.EnvM Val) Env.Var
 varFor gramVar = do
   varMay <- E.gets $ M.lookup gramVar
   case varMay of
     Just var -> return var
-    Nothing  -> P.lift Env.var
+    Nothing  -> do
+      var <- P.lift Env.var
+      E.modify' $ M.insert gramVar var
+      return var
 
 
 -- | Anchor the given tree with the given terminal and its accompanying FS.
@@ -270,15 +303,29 @@ anchorFS
   -> FS.ClosedFS Key Val -- ^ The accompanying FS
   -> FSTree ATerm        -- ^ `FSTree` with an anchor
   -> Env.EnvM Val (FSTree ATerm)
-anchorFS anchor newFS (R.Node label@(typ, oldFS) xs) = case typ of
-  O.NonTerm x -> R.Node label <$> mapM (anchorFS anchor newFS) xs
+anchorFS anc newFS (R.Node label@(typ, oldFS) xs) = case typ of
+  O.NonTerm x -> R.Node label <$> mapM (anchorFS anc newFS) xs
   O.Foot x -> return $ R.Node label []
   O.Term t -> case t of
     Term _ -> return $ R.Node label []
     Anchor _ -> do
       newFS' <- FS.reopen newFS
       fs <- FS.unifyFS oldFS newFS'
-      return $ R.Node (O.Term (Term anchor), fs) []
+      env <- E.get
+      -- trace (show oldFS) $ trace (show newFS') $ trace (show fs) $ trace (show env) $
+      return $ R.Node (O.Term (Term anc), fs) []
+
+
+-- | Extract the tree embedded in the environment and the accompanying computation.
+splitFSTree
+  :: Env.EnvM Val (FSTree Term)
+  -> Maybe
+     ( FSTree.Tree NonTerm Term
+     , C.Comp (FS.ClosedFS Key Val) )
+splitFSTree source = do
+  let comp = FSTree.compile source
+  tree <- FSTree.extract source
+  return (tree, comp)
 
 
 -------------------------------------------------

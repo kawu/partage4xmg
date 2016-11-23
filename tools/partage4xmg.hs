@@ -111,12 +111,17 @@ parseCfgOptions = P.ParseCfg
         ( metavar "START-SYM"
        <> long "start-sym"
        <> short 's' )
-  <*> option
-    auto
+  <*> option auto
      ( metavar "PRINT-PARSED"
        <> value 10
        <> long "print-parsed"
        <> short 'p' )
+  <*> switch
+     ( -- metavar "USE-FEATURES"
+          long "use-features"
+       -- <> value True
+       <> help "Use FS unification"
+       <> short 'u' )
 
 
 parseOptions :: Parser Command

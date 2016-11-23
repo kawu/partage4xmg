@@ -41,7 +41,7 @@ import qualified NLP.Partage.Auto as Auto
 import qualified NLP.Partage.Auto.Trie as Trie
 
 import qualified NLP.Partage4Xmg.Grammar as P
-import qualified NLP.Partage4Xmg.Lexicon as PL
+import qualified NLP.Partage4Xmg.Lexicon as Lex
 
 
 --------------------------------------------------
@@ -214,10 +214,10 @@ getLexTrees
     -> IO (S.Set Tree)
 getLexTrees gramPath lexPath = do
     treeMap <- getTreeMap gramPath
-    lemmas  <- PL.readLexicon lexPath
+    words <- Lex.readLexicon lexPath
     let treeList =
-          [ anchor (L.toStrict $ PL.name lemma) tree
-          | (lemma, famSet) <- lemmas
+          [ anchor (L.toStrict $ Lex.lemma word) tree
+          | (word, famSet) <- words
           , family <- S.toList famSet
           , tree   <- maybe [] S.toList (M.lookup family treeMap) ]
     flip E.execStateT S.empty $ E.forM_ treeList $ \tree -> do

@@ -13,7 +13,6 @@ module NLP.Partage4Xmg.Parse
 
 
 import           Control.Monad              (forM_, unless, when)
-import qualified Control.Monad.State.Strict as E
 import           Control.Monad.Trans.Maybe
 
 import           Data.Maybe                 (maybeToList)
@@ -87,17 +86,24 @@ mkAuto = mkAutoFS . map (, const $ Just ())
 
 
 -- | Parse the given sentence from the given start symbol with the given grammar.
-parseWith :: Ens.Grammar -> T.Text -> [T.Text]  -> IO [Parsed.Tree T.Text T.Text]
+parseWith
+  :: Ens.Grammar
+  -- ^ The TAG grammar
+  -> T.Text
+  -- ^ Start symbol
+  -> [T.Text]
+  -- ^ The sentence to parse
+  -> IO [Parsed.Tree T.Text T.Text]
 parseWith gram begSym sent0 = do
   let interps = map (Ens.getInterps gram . L.fromStrict) sent0
       elemTrees = concat
-        [ Ens.getTrees gram interp
+        [ map fst $ Ens.getTreesFS gram interp
         | interpSet <- interps
         , interp <- S.toList interpSet ]
       auto = mkAuto elemTrees
       input =
         [ S.fromList
-          . map (\interp -> (L.toStrict . Lex.name $ Morph.lemma interp, ()))
+          . map (\interp -> (L.toStrict $ Morph.lemma interp, ()))
           . S.toList
           $ interpSet
         | interpSet <- interps ]
@@ -112,8 +118,15 @@ parseWith gram begSym sent0 = do
   Earley.parseAuto auto begSym . Earley.fromSets $ input
 
 
--- | An FS-aware version of `parseWith`.
-parseWithFS :: Ens.Grammar -> T.Text -> [T.Text]  -> IO [Parsed.Tree T.Text T.Text]
+-- | Like `parseWith` but with FS unification.
+parseWithFS
+  :: Ens.Grammar
+  -- ^ The TAG grammar
+  -> T.Text
+  -- ^ Start symbol
+  -> [T.Text]
+  -- ^ The sentence to parse
+  -> IO [Parsed.Tree T.Text T.Text]
 parseWithFS gram begSym sent0 = do
   let interps = map (Ens.getInterps gram . L.fromStrict) sent0
       elemTrees = concat
@@ -124,20 +137,12 @@ parseWithFS gram begSym sent0 = do
       input =
         [ S.fromList
           . map (\interp ->
-                   ( L.toStrict . Lex.name $ Morph.lemma interp
+                   ( L.toStrict $ Morph.lemma interp
                    , Ens.closeAVM $ Morph.avm interp )
                 )
           . S.toList
           $ interpSet
         | interpSet <- interps ]
-
---   -- logging
---   forM_ (S.toList elemTrees) $
---     putStrLn . R.drawTree . fmap show
---   putStrLn ""
---   forM_ input print
-
-  -- parsing
   Earley.parseAuto auto begSym . Earley.fromSets $ input
 
 

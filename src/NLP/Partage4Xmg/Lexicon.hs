@@ -5,9 +5,16 @@
 -- | Lexicon parsers.
 
 
-module NLP.Partage4Xmg.Lexicon where
+module NLP.Partage4Xmg.Lexicon
+( Word (..)
+, Entry
+, parseLexicon
+, readLexicon
+, printLexicon
+) where
 
 
+import           Prelude hiding (Word)
 import           Control.Applicative ((*>), (<$>), (<*>),
                         optional, (<|>))
 import           Control.Monad ((<=<))
@@ -42,17 +49,17 @@ type P a = PolySoup.P (XmlTree L.Text) a
 type Q a = PolySoup.Q (XmlTree L.Text) a
 
 
--- | Lemma.
-data Lemma = Lemma
-    { name :: L.Text
-      -- ^ Name of the lemma (i.e. the lemma itself)
+-- | Word.
+data Word = Word
+    { lemma :: L.Text
+      -- ^ Lemma -- the base form of the word
     , cat :: L.Text
-      -- ^ Lemma category (e.g. "subst")
+      -- ^ Category of the word (e.g. "subst")
     } deriving (Show, Eq, Ord)
 
 
 -- | Lexicon entry.
-type Entry = (Lemma, S.Set Family)
+type Entry = (Word, S.Set Family)
 
 
 -- -- | Lexicon entry.
@@ -84,10 +91,12 @@ lexiconQ = true //> lemmaQ
 -- | Entry parser (family + one or more trees).
 lemmaQ :: Q Entry
 lemmaQ = (named "lemma" *> nameCat) `join` \(nam, cat') -> do
-  let lemma = Lemma nam cat'
+  let word = Word
+        { lemma = nam
+        , cat = cat' }
   famSet <- S.fromList <$>
     every' (node famNameQ)
-  return (lemma, famSet)
+  return (word, famSet)
   where
     nameCat = (,) <$> attr "name" <*> attr "cat"
     famNameQ = getFamName <$> (named "anchor" *> attr "tree_id")

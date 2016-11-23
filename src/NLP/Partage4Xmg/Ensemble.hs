@@ -6,15 +6,25 @@ module NLP.Partage4Xmg.Ensemble
 (
 -- * Grammar
   Grammar
-, Tree
 , getInterps
-, getTrees
 , getTreesFS
-, closeAVM
+
+-- * Types
+, NonTerm
+, Term
+, Node
+, Tree
+-- ** FS-related
+, Key
+, Val
+, ClosedFS
 
 -- * Reading
 , GramCfg(..)
 , readGrammar
+
+-- * Utils
+, closeAVM
 ) where
 
 
@@ -29,13 +39,9 @@ import qualified Data.Set                   as S
 import qualified Data.Text                  as T
 import qualified Data.Text.Lazy             as L
 import qualified Data.Tree                  as R
--- import qualified Data.Traversable           as Trav
 import qualified Pipes                      as P
 import qualified Pipes.Prelude              as P
 
-
-import qualified NLP.Partage.DAG            as D
-import qualified NLP.Partage.Earley         as Earley
 import qualified NLP.Partage.Tree.Other     as O
 import qualified NLP.Partage.Tree.Comp      as C
 import qualified NLP.Partage.Env            as Env
@@ -48,6 +54,55 @@ import qualified NLP.Partage4Xmg.Grammar    as G
 
 
 --------------------------------------------------
+-- Types
+--------------------------------------------------
+
+
+-- | Either a regular terminal or an anchor.
+data ATerm
+    = Term T.Text
+    | Anchor T.Text
+    deriving (Show, Read, Eq, Ord)
+
+
+-- | A non-terminal.
+type NonTerm = T.Text
+
+
+-- | A regular terminal.
+type Term = T.Text
+
+
+-- | Type of the node in TAG trees.
+type Node t = O.Node NonTerm t
+
+
+-- | A TAG tree.
+type Tree t = R.Tree (Node t)
+
+
+-------------------------------------------------
+-- FS-related types
+-------------------------------------------------
+
+
+-- | FS key.
+type Key = T.Text
+
+
+-- | FS value.
+type Val = T.Text
+
+
+-- | FS-aware tree.
+type FSTree t = FSTree.FSTree NonTerm t Key Val
+
+
+-- | A closed FS.
+type ClosedFS = FS.ClosedFS Key Val
+
+
+--------------------------------------------------
 -- The grammar, lemmas and morphology combined
 --------------------------------------------------
 
@@ -55,7 +110,7 @@ import qualified NLP.Partage4Xmg.Grammar    as G
 -- | All the components of a grammar.
 data Grammar = Grammar
   { morphMap :: M.Map L.Text (S.Set Morph.Ana)
-  , lexMap   :: M.Map Lex.Lemma (S.Set G.Family)
+  , lexMap   :: M.Map Lex.Word (S.Set G.Family)
   , treeMap  :: M.Map G.Family (S.Set G.Tree)
   }
 
@@ -71,37 +126,32 @@ getInterps Grammar{..} orth = case M.lookup orth morphMap of
 _getTrees :: Grammar -> Morph.Ana -> S.Set G.Tree
 _getTrees Grammar{..} ana = S.unions
   [ treeSet
-  | famSet <- maybeToList $ M.lookup (Morph.lemma ana) lexMap
+  | famSet <- maybeToList $ M.lookup (Morph.word ana) lexMap
   , family <- S.toList famSet
   , treeSet <- maybeToList $ M.lookup family treeMap
   ]
 
 
--- | Retrieve the set of grammar trees related to te given interpretation.
-getTrees :: Grammar -> Morph.Ana -> [Tree Term]
-getTrees gram ana
-  = map simplify
-  . map (anchor . L.toStrict . Lex.name $ Morph.lemma ana)
-  . map convert
-  . S.toList
-  $ _getTrees gram ana
+-- -- | Retrieve the set of grammar trees related to te given interpretation.
+-- getTrees :: Grammar -> Morph.Ana -> [Tree Term]
+-- getTrees gram ana
+--   = map simplify
+--   . map (anchor . L.toStrict $ Morph.lemma ana)
+--   . map convert
+--   . S.toList
+--   $ _getTrees gram ana
 
 
 -- | Retrieve the set of FS-aware grammar trees related to te given interpretation.
-getTreesFS
-  :: Grammar
-  -> Morph.Ana
-  -> [ ( Tree Term
-       , C.Comp (FS.ClosedFS Key Val) )
-     ]
+getTreesFS :: Grammar -> Morph.Ana -> [(Tree Term, C.Comp ClosedFS)]
 getTreesFS gram ana
   = mapMaybe process
   . S.toList
   $ _getTrees gram ana
   where
     process tree = splitFSTree . fmap simplifyFS $ do
-      let term = L.toStrict (Lex.name $ Morph.lemma ana)
-      converted <- E.evalStateT (convertFS tree) M.empty
+      let term = L.toStrict (Morph.lemma ana)
+      converted <- withVarMap (convertFS tree)
       let fs = closeAVM (Morph.avm ana)
       anchorFS term fs converted
 
@@ -110,7 +160,7 @@ getTreesFS gram ana
 -- variables of this AVM are not shared with other AVMs.
 closeAVM :: G.AVM -> FS.ClosedFS Key Val
 closeAVM avm = maybe [] id . fst . Env.runEnvM $ do
-  fs <- E.evalStateT (convertAVM avm) M.empty
+  fs <- withVarMap (convertAVM avm)
   FS.close fs
 
 
@@ -144,79 +194,41 @@ readGrammar GramCfg{..} = do
     }
 
 
---------------------------------------------------
--- Local grammar type
---------------------------------------------------
-
-
--- | Terminal is either a regular terminal or an anchor.
-data ATerm
-    = Term T.Text
-    | Anchor T.Text
-    deriving (Show, Read, Eq, Ord)
-
-
--- | Non-terminal is just as in the original grammar.
-type NonTerm = T.Text
-
-
--- | A simple terminal.
-type Term = T.Text
-
-
--- | Type of the node in TAG trees.
-type Node t = O.Node NonTerm t
-
-
--- | The tree itself.
-type Tree t = R.Tree (Node t)
-
-
--------------------------------------------------
--- Tree conversion
--------------------------------------------------
-
-
--- | Remove information about the past anchors.  Fail if there
--- are some anchors left.
-simplify :: Tree ATerm -> Tree Term
-simplify = fmap simplifyNode
-
-
--- | Remove information about the anchors.  Fail if there are still
--- some anchors left.
-simplifyNode :: O.Node NonTerm ATerm -> O.Node NonTerm Term
-simplifyNode node = case node of
-  O.Term (Term x) -> O.Term x
-  O.Term (Anchor x) -> error "simlifyNode: cannot simplify, anchors left"
-  O.NonTerm x -> O.NonTerm x
-  O.Foot x -> O.Foot x
-
-
--- | Convert the parsed tree to the required form.
-convert :: G.Tree -> Tree ATerm
-convert (R.Node G.NonTerm{..} xs) =
-  case typ of
-    G.Std       -> below $ O.NonTerm sym'
-    G.Foot      -> leaf  $ O.Foot sym'
-    G.Anchor    -> R.Node (O.NonTerm sym')
-      [leaf . O.Term $ Anchor sym']
-    G.Lex       -> leaf  . O.Term $ Term sym'
-    G.Other _   -> below $ O.NonTerm sym'
-  where
-    below x = R.Node x $ map convert xs
-    leaf x  = R.Node x []
-    sym' = L.toStrict sym
-
-
--- | Anchor the given tree with the given terminal.
-anchor :: Term -> Tree ATerm -> Tree ATerm
-anchor a (R.Node n xs) = case n of
-  O.NonTerm x -> R.Node (O.NonTerm x) (map (anchor a) xs)
-  O.Foot x    -> R.Node (O.Foot x) []
-  O.Term t    -> case t of
-    Term _   -> R.Node (O.Term t) []
-    Anchor _ -> R.Node (O.Term (Term a)) []
+-- -------------------------------------------------
+-- -- Tree conversion
+-- -------------------------------------------------
+--
+--
+-- -- | Remove information about the past anchors.  Fail if there
+-- -- are some anchors left.
+-- simplify :: Tree ATerm -> Tree Term
+-- simplify = fmap simplifyNode
+--
+--
+-- -- | Convert the parsed tree to the required form.
+-- convert :: G.Tree -> Tree ATerm
+-- convert (R.Node G.NonTerm{..} xs) =
+--   case typ of
+--     G.Std       -> below $ O.NonTerm sym'
+--     G.Foot      -> leaf  $ O.Foot sym'
+--     G.Anchor    -> R.Node (O.NonTerm sym')
+--       [leaf . O.Term $ Anchor sym']
+--     G.Lex       -> leaf  . O.Term $ Term sym'
+--     G.Other _   -> below $ O.NonTerm sym'
+--   where
+--     below x = R.Node x $ map convert xs
+--     leaf x  = R.Node x []
+--     sym' = L.toStrict sym
+--
+--
+-- -- | Anchor the given tree with the given terminal.
+-- anchor :: Term -> Tree ATerm -> Tree ATerm
+-- anchor a (R.Node n xs) = case n of
+--   O.NonTerm x -> R.Node (O.NonTerm x) (map (anchor a) xs)
+--   O.Foot x    -> R.Node (O.Foot x) []
+--   O.Term t    -> case t of
+--     Term _   -> R.Node (O.Term t) []
+--     Anchor _ -> R.Node (O.Term (Term a)) []
 
 
 -------------------------------------------------
@@ -224,20 +236,13 @@ anchor a (R.Node n xs) = case n of
 -------------------------------------------------
 
 
--- | FS key.
-type Key = T.Text
-
-
--- | FS value.
-type Val = T.Text
-
-
--- | FS-aware tree.
-type FSTree t = FSTree.FSTree NonTerm t Key Val
-
-
 -- | A mapping from XMG variables to local variables.
 type VarMap = M.Map G.Var Env.Var
+
+
+-- | Perform a computation with a variable map (`VarMap`).
+withVarMap :: (Monad m) => E.StateT VarMap m a -> m a
+withVarMap = flip E.evalStateT M.empty
 
 
 -- | Remove information about the past anchors.  Fail if there
@@ -304,14 +309,14 @@ anchorFS
   -> FSTree ATerm        -- ^ `FSTree` with an anchor
   -> Env.EnvM Val (FSTree ATerm)
 anchorFS anc newFS (R.Node label@(typ, oldFS) xs) = case typ of
-  O.NonTerm x -> R.Node label <$> mapM (anchorFS anc newFS) xs
-  O.Foot x -> return $ R.Node label []
+  O.NonTerm _ -> R.Node label <$> mapM (anchorFS anc newFS) xs
+  O.Foot _ -> return $ R.Node label []
   O.Term t -> case t of
     Term _ -> return $ R.Node label []
     Anchor _ -> do
       newFS' <- FS.reopen newFS
       fs <- FS.unifyFS oldFS newFS'
-      env <- E.get
+      -- env <- E.get
       -- trace (show oldFS) $ trace (show newFS') $ trace (show fs) $ trace (show env) $
       return $ R.Node (O.Term (Term anc), fs) []
 
@@ -343,13 +348,17 @@ runListT :: (Monad m) => P.ListT m a -> m [a]
 runListT = P.toListM . P.enumerate
 
 
--- | Map a function on either value.
-onEither :: (a -> b) -> Either a a -> Either b b
-onEither f (Left x) = Left (f x)
-onEither f (Right x) = Right (f x)
-
-
 -- | Map a function on left value.
 onLeft :: (a -> c) -> Either a b -> Either c b
 onLeft f (Left x) = Left (f x)
 onLeft _ (Right x) = Right x
+
+
+-- | Remove information about the anchors.  Fail if there are still
+-- some anchors left.
+simplifyNode :: O.Node n ATerm -> O.Node n Term
+simplifyNode node = case node of
+  O.Term (Term x) -> O.Term x
+  O.Term (Anchor _) -> error "simlifyNode: cannot simplify, anchors left"
+  O.NonTerm x -> O.NonTerm x
+  O.Foot x -> O.Foot x

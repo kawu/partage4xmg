@@ -15,6 +15,8 @@ module NLP.Partage4Xmg.Ensemble
 ) where
 
 
+import qualified Control.Monad.State.Strict as E
+
 import           Data.Maybe                 (maybeToList)
 import qualified Data.Map.Strict            as M
 import qualified Data.Set                   as S
@@ -26,6 +28,9 @@ import qualified Data.Tree                  as R
 import qualified NLP.Partage.DAG            as D
 import qualified NLP.Partage.Earley         as Earley
 import qualified NLP.Partage.Tree.Other     as O
+import qualified NLP.Partage.Env            as Env
+import qualified NLP.Partage.FS             as FS
+import qualified NLP.Partage.FSTree         as FSTree
 
 import qualified NLP.Partage4Xmg.Lexicon    as Lex
 import qualified NLP.Partage4Xmg.Morph      as Morph
@@ -111,7 +116,7 @@ readGrammar GramCfg{..} = do
 
 
 -- | Terminal is either a regular terminal or an anchor.
-data Term
+data ATerm
     = Term T.Text
     | Anchor T.Text
     deriving (Show, Read, Eq, Ord)
@@ -119,6 +124,10 @@ data Term
 
 -- | Non-terminal is just as in the original grammar.
 type NonTerm = T.Text
+
+
+-- | A simple terminal.
+type Term = T.Text
 
 
 -- | Type of the node in TAG trees.
@@ -136,7 +145,7 @@ type Tree t = R.Tree (Node t)
 
 -- | Remove information about the past anchors.  Fail if there
 -- are some anchors left.
-simplify :: Tree Term -> Tree T.Text
+simplify :: Tree ATerm -> Tree Term
 simplify = fmap $ \node -> case node of
   O.Term (Term x) -> O.Term x
   O.Term (Anchor x) -> error "simlify: cannot simplify, anchors left"
@@ -145,7 +154,7 @@ simplify = fmap $ \node -> case node of
 
 
 -- | Convert the parsed tree to the required form.
-convert :: G.Tree -> Tree Term
+convert :: G.Tree -> Tree ATerm
 convert (R.Node G.NonTerm{..} xs) =
   case typ of
     G.Std       -> below $ O.NonTerm sym'
@@ -161,10 +170,59 @@ convert (R.Node G.NonTerm{..} xs) =
 
 
 -- | Anchor the given tree with the given terminal.
-anchor :: T.Text -> Tree Term -> Tree Term
+anchor :: T.Text -> Tree ATerm -> Tree ATerm
 anchor a (R.Node n xs) = case n of
   O.NonTerm x -> R.Node (O.NonTerm x) (map (anchor a) xs)
   O.Foot x    -> R.Node (O.Foot x) []
   O.Term t    -> case t of
     Term _   -> R.Node (O.Term t) []
     Anchor _ -> R.Node (O.Term (Term a)) []
+
+
+
+-------------------------------------------------
+-- FS-aware tree conversion
+-------------------------------------------------
+
+
+-- | FS key.
+type Key = T.Text
+
+
+-- | FS value.
+type Val = T.Text
+
+
+-- | FS-aware tree.
+type FSTree t = FSTree.FSTree NonTerm t Key Val
+
+
+-- | A mapping from XMG variables to local variables.
+type VarMap = M.Map G.Var Env.Var
+
+
+-- | Convert the parsed tree to the required form.
+convertFS :: G.Tree -> E.StateT VarMap (Env.EnvM Val) (FSTree ATerm)
+convertFS (R.Node G.NonTerm{..} xs) =
+  case typ of
+    G.Std -> below $ O.NonTerm sym'
+    G.Foot -> leaf $ O.Foot sym'
+-- TODO: FS assigned to the anchor should unify with the one assigned
+-- to the terminal in the morphology file.
+--     G.Anchor -> do
+--       theLeaf <- leaf . O.Term $ Anchor sym'
+--       return $ R.Node (O.NonTerm (sym', M.empty)) [theLeaf]
+    G.Lex -> leaf . O.Term $ Term sym'
+--     G.Other _ -> below $ O.NonTerm sym'
+  where
+    below x = do
+      fs <- convertAVM avm
+      R.Node (x, fs) <$> mapM convertFS xs
+    leaf x = do
+      fs <- convertAVM avm
+      return $ R.Node (x, fs) []
+    sym' = L.toStrict sym
+
+
+convertAVM :: G.AVM -> E.StateT VarMap (Env.EnvM Val) (FS.FS Key Val)
+convertAVM = undefined

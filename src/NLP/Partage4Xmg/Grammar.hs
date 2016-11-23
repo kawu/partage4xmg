@@ -5,7 +5,25 @@
 -- | Parsing TAG grammars consistent with the XMG format.
 
 
-module NLP.Partage4Xmg.Grammar where
+module NLP.Partage4Xmg.Grammar
+(
+-- * Types
+  Family
+, Tree
+, NonTerm (..)
+, Type (..)
+, SubType
+, AVM
+, Sym
+, Attr
+, Val
+, Var
+
+-- * Functions
+, parseGrammar
+, readGrammar
+, printGrammar
+) where
 
 
 import           Control.Applicative ((*>), (<$>), (<*>),
@@ -81,8 +99,9 @@ type SubType = L.Text
 data NonTerm = NonTerm
     { typ   :: Type
     , sym   :: Sym
-    , top   :: Maybe AVM
-    , bot   :: Maybe AVM }
+    , avm   :: AVM }
+--     , top   :: Maybe AVM
+--     , bot   :: Maybe AVM }
     deriving (Show, Eq, Ord)
 
 
@@ -138,10 +157,13 @@ nodeQ = (named "node" *> attr "type") `join` ( \typTxt -> R.Node
 nonTermQ :: L.Text -> Q NonTerm
 nonTermQ typ' = joinR (named "narg") $
     first $ joinR (named "fs") $ do
-        sym' <- first symQ
-        top' <- optional $ first $ avmQ "top"
-        bot' <- optional $ first $ avmQ "bot"
-        return $ NonTerm (parseTyp typ') sym' top' bot'
+        -- sym' <- first symQ
+        avm' <- avmP
+        -- top' <- optional $ first $ avmQ "top"
+        -- bot' <- optional $ first $ avmQ "bot"
+        -- return $ NonTerm (parseTyp typ') sym' avm'
+        let sym' = maybe "" id (takeLeft =<< M.lookup "cat" avm')
+        return $ NonTerm (parseTyp typ') sym' avm'
 
 
 -- | Syntagmatic value parser.
@@ -150,11 +172,16 @@ symQ = joinR (named "f" *> hasAttrVal "name" "cat") $
     first $ node (named "sym" *> attr "value")
 
 
+-- -- | AVM parser.
+-- avmQ :: L.Text -> Q AVM
+-- avmQ name' = joinR (named "f" *> hasAttrVal "name" name') $
+--     first $ joinR (named "fs") $
+--         M.fromList <$> every attrValQ
+
+
 -- | AVM parser.
-avmQ :: L.Text -> Q AVM
-avmQ name' = joinR (named "f" *> hasAttrVal "name" name') $
-    first $ joinR (named "fs") $
-        M.fromList <$> every attrValQ
+avmP :: P AVM
+avmP = M.fromList <$> every attrValQ
 
 
 -- | An attribute/value parser.
@@ -202,3 +229,13 @@ printGrammar =
         putStrLn $ "### " ++ show famName ++ " ###"
         putStrLn . R.drawTree . fmap show $ t
   in  mapM_ printTree <=< readGrammar
+
+
+-------------------------------------------------
+-- Utils
+-------------------------------------------------
+
+
+takeLeft :: Either a b -> Maybe a
+takeLeft (Left x) = Just x
+takeLeft _ = Nothing

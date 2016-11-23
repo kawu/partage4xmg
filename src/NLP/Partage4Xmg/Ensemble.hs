@@ -1,4 +1,5 @@
 {-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE TupleSections   #-}
 
 
 module NLP.Partage4Xmg.Ensemble
@@ -15,6 +16,7 @@ module NLP.Partage4Xmg.Ensemble
 ) where
 
 
+import           Control.Arrow              (first, second)
 import qualified Control.Monad.State.Strict as E
 
 import           Data.Maybe                 (maybeToList)
@@ -24,6 +26,9 @@ import qualified Data.Text                  as T
 import qualified Data.Text.Lazy             as L
 import qualified Data.Tree                  as R
 -- import qualified Data.Traversable           as Trav
+import qualified Pipes                      as P
+import qualified Pipes.Prelude              as P
+
 
 import qualified NLP.Partage.DAG            as D
 import qualified NLP.Partage.Earley         as Earley
@@ -146,9 +151,15 @@ type Tree t = R.Tree (Node t)
 -- | Remove information about the past anchors.  Fail if there
 -- are some anchors left.
 simplify :: Tree ATerm -> Tree Term
-simplify = fmap $ \node -> case node of
+simplify = fmap simplifyNode
+
+
+-- | Remove information about the anchors.  Fail if there are still
+-- some anchors left.
+simplifyNode :: O.Node NonTerm ATerm -> O.Node NonTerm Term
+simplifyNode node = case node of
   O.Term (Term x) -> O.Term x
-  O.Term (Anchor x) -> error "simlify: cannot simplify, anchors left"
+  O.Term (Anchor x) -> error "simlifyNode: cannot simplify, anchors left"
   O.NonTerm x -> O.NonTerm x
   O.Foot x -> O.Foot x
 
@@ -170,14 +181,13 @@ convert (R.Node G.NonTerm{..} xs) =
 
 
 -- | Anchor the given tree with the given terminal.
-anchor :: T.Text -> Tree ATerm -> Tree ATerm
+anchor :: Term -> Tree ATerm -> Tree ATerm
 anchor a (R.Node n xs) = case n of
   O.NonTerm x -> R.Node (O.NonTerm x) (map (anchor a) xs)
   O.Foot x    -> R.Node (O.Foot x) []
   O.Term t    -> case t of
     Term _   -> R.Node (O.Term t) []
     Anchor _ -> R.Node (O.Term (Term a)) []
-
 
 
 -------------------------------------------------
@@ -201,19 +211,26 @@ type FSTree t = FSTree.FSTree NonTerm t Key Val
 type VarMap = M.Map G.Var Env.Var
 
 
+-- | Remove information about the past anchors.  Fail if there
+-- are some anchors left.
+simplifyFS :: FSTree ATerm -> FSTree Term
+simplifyFS = fmap $ first simplifyNode
+
+
 -- | Convert the parsed tree to the required form.
 convertFS :: G.Tree -> E.StateT VarMap (Env.EnvM Val) (FSTree ATerm)
 convertFS (R.Node G.NonTerm{..} xs) =
   case typ of
     G.Std -> below $ O.NonTerm sym'
     G.Foot -> leaf $ O.Foot sym'
--- TODO: FS assigned to the anchor should unify with the one assigned
--- to the terminal in the morphology file.
---     G.Anchor -> do
---       theLeaf <- leaf . O.Term $ Anchor sym'
---       return $ R.Node (O.NonTerm (sym', M.empty)) [theLeaf]
+    -- TODO: FS assigned to the anchor should unify with the one assigned
+    -- to the terminal in the morphology file.
+    G.Anchor -> do
+      fs <- convertAVM avm
+      theLeaf <- leaf . O.Term $ Anchor sym'
+      return $ R.Node (O.NonTerm sym', fs) [theLeaf]
     G.Lex -> leaf . O.Term $ Term sym'
---     G.Other _ -> below $ O.NonTerm sym'
+    G.Other _ -> below $ O.NonTerm sym'
   where
     below x = do
       fs <- convertAVM avm
@@ -224,5 +241,68 @@ convertFS (R.Node G.NonTerm{..} xs) =
     sym' = L.toStrict sym
 
 
+-- | Convert an XMG-style AVM to a FS.
 convertAVM :: G.AVM -> E.StateT VarMap (Env.EnvM Val) (FS.FS Key Val)
-convertAVM = undefined
+convertAVM avm = fmap M.fromList . runListT $ do
+  (key, valVar) <-
+    first L.toStrict .
+    second (onLeft L.toStrict)
+    <$> each (M.toList avm)
+  case valVar of
+    Left val -> return (key, FS.Val . S.singleton $ val)
+    Right var0 -> do
+      var <- P.lift $ varFor var0
+      return (key, FS.Var var)
+
+
+-- | Retrieve the corresponding environment variable.
+varFor :: G.Var -> E.StateT VarMap (Env.EnvM Val) Env.Var
+varFor gramVar = do
+  varMay <- E.gets $ M.lookup gramVar
+  case varMay of
+    Just var -> return var
+    Nothing  -> P.lift Env.var
+
+
+-- | Anchor the given tree with the given terminal and its accompanying FS.
+anchorFS
+  :: Term                -- ^ Terminal used to replace the anchor
+  -> FS.ClosedFS Key Val -- ^ The accompanying FS
+  -> FSTree ATerm        -- ^ `FSTree` with an anchor
+  -> Env.EnvM Val (FSTree ATerm)
+anchorFS anchor newFS (R.Node label@(typ, oldFS) xs) = case typ of
+  O.NonTerm x -> R.Node label <$> mapM (anchorFS anchor newFS) xs
+  O.Foot x -> return $ R.Node label []
+  O.Term t -> case t of
+    Term _ -> return $ R.Node label []
+    Anchor _ -> do
+      newFS' <- FS.reopen newFS
+      fs <- FS.unifyFS oldFS newFS'
+      return $ R.Node (O.Term (Term anchor), fs) []
+
+
+-------------------------------------------------
+-- Utils
+-------------------------------------------------
+
+
+-- | ListT from a list.
+each :: Monad m => [a] -> P.ListT m a
+each = P.Select . P.each
+
+
+-- | Run a ListT computation (unidiomatic Haskell?).
+runListT :: (Monad m) => P.ListT m a -> m [a]
+runListT = P.toListM . P.enumerate
+
+
+-- | Map a function on either value.
+onEither :: (a -> b) -> Either a a -> Either b b
+onEither f (Left x) = Left (f x)
+onEither f (Right x) = Right (f x)
+
+
+-- | Map a function on left value.
+onLeft :: (a -> c) -> Either a b -> Either c b
+onLeft f (Left x) = Left (f x)
+onLeft _ (Right x) = Right x

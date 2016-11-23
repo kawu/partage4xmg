@@ -1,205 +1,187 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE TupleSections     #-}
 
 
--- | Parsing French TAG generated from an FrenchTAG XMG metagrammar.
--- Should work also with other XMG-generated grammars.
+-- | Parsing sentences from input and printing trees.
 
 
-module NLP.Partage4Xmg.Parse where
+module NLP.Partage4Xmg.Parse
+( ParseCfg (..)
+, parseAll
+) where
 
 
-import           Control.Applicative ((*>), (<$>), (<*>),
-                        optional, (<|>))
-import           Control.Monad ((<=<))
+import           Control.Monad              (forM_, unless, when)
+import qualified Control.Monad.State.Strict as E
+import           Control.Monad.Trans.Maybe
 
-import qualified Data.Foldable       as F
--- import qualified Data.Text           as T
-import qualified Data.Text.Lazy      as L
-import qualified Data.Text.Lazy.IO   as L
-import qualified Data.Tree           as R
-import qualified Data.Map.Strict     as M
+import           Data.Maybe                 (maybeToList)
+import qualified Data.Map.Strict            as M
+import qualified Data.MemoCombinators       as Memo
+import qualified Data.Set                   as S
+import qualified Data.Text                  as T
+import qualified Data.Text.Lazy             as L
+import qualified Data.Text.Lazy.IO          as L
+import qualified Data.Tree                  as R
+import Data.IORef
+import           Pipes
+import qualified Pipes.Prelude              as Pipes
 
-import qualified Text.HTML.TagSoup   as TagSoup
-import           Text.XML.PolySoup   hiding (P, Q)
-import qualified Text.XML.PolySoup   as PolySoup
+import qualified NLP.Partage.DAG            as DAG
+import qualified NLP.Partage.Earley         as Earley
+import qualified NLP.Partage.Tree           as Parsed
+import qualified NLP.Partage.Auto.Trie      as Trie
+import qualified NLP.Partage.Tree.Other     as O
 
--- import           NLP.TAG.Vanilla.Core    (View(..))
-
-
--- import           NLP.Partage4Xmg.Tree
-
-
--------------------------------------------------
--- Data types
--------------------------------------------------
-
-
--- | Parsing predicates.
-type P a = PolySoup.P (XmlTree L.Text) a
-type Q a = PolySoup.Q (XmlTree L.Text) a
+import qualified NLP.Partage4Xmg.Lexicon    as Lex
+import qualified NLP.Partage4Xmg.Morph      as Morph
+import qualified NLP.Partage4Xmg.Grammar    as Gram
+import qualified NLP.Partage4Xmg.Ensemble   as Ens
 
 
--- instance View L.Text where
---     view = L.unpack
+--------------------------------------------------
+-- Configuration
+--------------------------------------------------
 
 
--- | Syntagmatic symbol.
-type Sym = L.Text
+-- | Parsing configuration.
+data ParseCfg = ParseCfg
+    { maxSize     :: Maybe Int
+    -- ^ Optional limit on the sentence size
+    , startSym    :: String
+    -- ^ The starting symbol of trees
+    , printParsed :: Int
+    -- ^ Print the set of parsed trees?
+    } deriving (Show, Read, Eq, Ord)
 
 
--- | Attribute.
-type Attr = L.Text
+-- | If the list longer than the given length?
+longerThan :: [a] -> Maybe Int -> Bool
+longerThan _ Nothing   = False
+longerThan xs (Just n) = length xs > n
 
 
--- | Attribute value.
-type Val = L.Text
-
-
--- | Variable.
-type Var = L.Text
-
-
--- | Attribute-value matrix.
-type AVM = M.Map Attr (Either Val Var)
-
-
--- | Non-terminal/node type.
-data Type
-    = Std
-    | Foot
-    | Anchor
-    | Lex
-    | Other SubType
-    deriving (Show, Eq, Ord)
-
-
--- | Node subtype (e.g. subst, nadj, whatever they mean...)
-type SubType = L.Text
-
-
--- | Non-terminal.
-data NonTerm = NonTerm
-    { typ   :: Type
-    , sym   :: Sym
-    , top   :: Maybe AVM
-    , bot   :: Maybe AVM }
-    deriving (Show, Eq, Ord)
-
-
--- | Partage4Xmg tree.
-type Tree = R.Tree NonTerm
-
-
--- | Name of a tree family.
-type Family = L.Text
-
-
--------------------------------------------------
+--------------------------------------------------
 -- Parsing
--------------------------------------------------
+--------------------------------------------------
 
 
--- | Grammar parser (as a parser).
-grammarP :: P [(Family, Tree)]
-grammarP = concat <$> every' grammarQ
+
+-- | Create an automaton from a list of lexicalized elementary trees.
+mkAuto :: [Ens.Tree T.Text] -> Earley.Auto T.Text T.Text ()
+mkAuto gram0 =
+  let gram = map (, const $ Just ()) gram0
+      dag = DAG.mkGram gram
+      tri = Trie.fromGram (DAG.factGram dag)
+  in  Earley.mkAuto (DAG.dagGram dag) tri
 
 
--- | Grammar parser.
-grammarQ :: Q [(Family, Tree)]
-grammarQ = concat <$> (true //> entryQ)
+-- | Parse the given sentence from the given start symbol with the given grammar.
+parseWith :: Ens.Grammar -> T.Text -> [T.Text]  -> IO [Parsed.Tree T.Text T.Text]
+parseWith gram begSym sent0 = do
+  let interps = map (Ens.getInterps gram . L.fromStrict) sent0
+      elemTrees = S.unions
+        [ Ens.getTrees gram interp
+        | interpSet <- interps
+        , interp <- S.toList interpSet ]
+      auto = mkAuto $ S.toList elemTrees
+      input =
+        [ S.fromList
+          . map (\interp -> (L.toStrict $ Morph.name interp, ()))
+          . S.toList
+          $ interpSet
+        | interpSet <- interps ]
+
+--   -- logging
+--   forM_ (S.toList elemTrees) $
+--     putStrLn . R.drawTree . fmap show
+--   putStrLn ""
+--   forM_ input print
+
+  -- parsing
+  Earley.parseAuto auto begSym . Earley.fromSets $ input
 
 
--- | Entry parser (family + one or more trees).
-entryQ :: Q [(Family, Tree)]
-entryQ = named "entry" `joinR` do
-    famName <- first familyQ
-    trees <- every' treeQ
-    return [(famName, t) | t <- trees]
+--------------------------------------------------
+-- Parsing
+--------------------------------------------------
 
 
--- | Tree parser.
-familyQ :: Q Family
-familyQ = named "family" `joinR` first (node name)
+-- | Read the grammar from the input file, sentences to parse from
+-- std input, and perform the experiment.
+parseAll
+  :: ParseCfg
+  -> Ens.GramCfg
+  -> IO ()
+parseAll ParseCfg{..} gramCfg = do
+  gram <- Ens.readGrammar gramCfg
+  lines <- map L.toStrict . L.lines <$> L.getContents
+  forM_ lines $ \line -> do
+    parseSet <- parseWith gram (T.pack startSym) (T.words line)
+    forM_ (take printParsed $ parseSet) $ \t -> do
+      putStrLn . R.drawTree . fmap show . O.encode . Left $ t
 
 
--- | Tree parser.
-treeQ :: Q Tree
-treeQ = named "tree" `joinR` first nodeQ
+-- -- | Read the grammar from the input file, sentences to parse from
+-- -- std input, and perform the experiment.
+-- statsOn
+--     :: StatCfg
+--     -> B.BuildData
+--     -- -> FilePath         -- ^ Grammar
+--     -- -> Maybe FilePath   -- ^ Lexicon (if present)
+--     -> IO ()
+-- statsOn StatCfg{..} buildData = do
+--     -- extract the grammar and build the automaton
+--     (dag, gramAuto) <- B.buildAuto buildData
+--     let auto = Earley.mkAuto dag gramAuto
+--     -- read sentences from input
+--     let thePipe = hoist lift sentPipe
+--     statMap <- flip E.execStateT M.empty . runEffect . for thePipe $
+--         \sent -> unless (sent `longerThan` maxSize) $ do
+--             stat <- liftIO $ do
+--                 (stat, parseSet) <- parseEarley auto sent
+--                 putStr "### "
+--                 putStr (show sent)
+--                 putStr " => " >> print stat
+--                 putStrLn ""
+--                 forM_ (take printParsed $ parseSet) $ \t -> do
+--                     putStrLn . R.drawTree . fmap show . O.encode . Left $ t
+--                 return stat
+--             E.modify $ M.insertWith addStat
+--                 (length sent) (newStat stat)
+--     liftIO $ do
+--         putStrLn ""
+--         putStrLn "length,sentences,parsed,nodes,edges"
+--         forM_ (M.toList statMap) $ \(n, stat) -> do
+--             putStr (show n ++ ",")
+--             printStat stat
+--             putStrLn ""
+--     liftIO $ do
+--         putStrLn ""
+--         putStrLn " === TOTAL === "
+--         putStrLn ""
+--         putStrLn "sentences,parsed,nodes,edges"
+--         printStat $ foldl1 addStat (M.elems statMap)
+--         putStrLn ""
+-- 
+-- 
+--   where
+-- 
+--     -- | Parse with Earley version.
+--     parseEarley auto sent = do
+--         let input = Earley.fromList $ map (,()) sent
+--         hype <- Earley.earleyAuto auto input
+--         let treeSet = Earley.parsedTrees hype
+--                         (T.pack startSym) (length sent)
+--         stat <- if not (null treeSet) then do
+--                     return $ Just
+--                         ( Earley.hyperNodesNum hype
+--                         , Earley.hyperEdgesNum hype )
+--                  else do return Nothing
+--         return (stat, treeSet)
 
 
--- | Node parser.
-nodeQ :: Q Tree
-nodeQ = (named "node" *> attr "type") `join` ( \typTxt -> R.Node
-        <$> first (nonTermQ typTxt)
-        <*> every' nodeQ )
-
-
--- | Non-terminal parser.
-nonTermQ :: L.Text -> Q NonTerm
-nonTermQ typ' = joinR (named "narg") $
-    first $ joinR (named "fs") $ do
-        sym' <- first symQ
-        top' <- optional $ first $ avmQ "top"
-        bot' <- optional $ first $ avmQ "bot"
-        return $ NonTerm (parseTyp typ') sym' top' bot'
-
-
--- | Syntagmatic value parser.
-symQ :: Q Sym
-symQ = joinR (named "f" *> hasAttrVal "name" "cat") $
-    first $ node (named "sym" *> attr "value")
-
-
--- | AVM parser.
-avmQ :: L.Text -> Q AVM
-avmQ name' = joinR (named "f" *> hasAttrVal "name" name') $
-    first $ joinR (named "fs") $
-        M.fromList <$> every attrValQ
-
-
--- | An attribute/value parser.
-attrValQ :: Q (Attr, Either Val Var)
-attrValQ = join (named "f" *> attr "name") $ \atr -> do
-    valVar <- first $ (Left <$> valQ)
-                  <|> (Right <$> varQ)
-    return (atr, valVar)
-
-
--- | Attribute value parser.
-valQ :: Q Val
-valQ = node $ named "sym" *> attr "value"
-
-
--- | Attribute variable parser.
-varQ :: Q Var
-varQ = node $ named "sym" *> attr "varname"
-
-
--- | Type parser.
-parseTyp :: L.Text -> Type
-parseTyp x = case x of
-    "std"       -> Std
-    "lex"       -> Lex
-    "anchor"    -> Anchor
-    "foot"      -> Foot
-    _           -> Other x
-
-
--- | Parse textual contents of the French TAG XML file.
-parseGrammar :: L.Text -> [(Family, Tree)]
-parseGrammar =
-    F.concat . evalP grammarP . parseForest . TagSoup.parseTags
-
-
--- | Parse the stand-alone French TAG xml file.
-readGrammar :: FilePath -> IO [(Family, Tree)]
-readGrammar path = parseGrammar <$> L.readFile path
-
-
-printGrammar :: FilePath -> IO ()
-printGrammar =
-  let printTree (famName, t) = do
-        putStrLn $ "### " ++ show famName ++ " ###"
-        putStrLn . R.drawTree . fmap show $ t
-  in  mapM_ printTree <=< readGrammar
+--------------------------------------------------
+-- Misc
+--------------------------------------------------

@@ -20,6 +20,7 @@ module NLP.Partage4Xmg.Build
 -- * Temp
 , printRules
 , getTrees
+, getTreeMap
 , printTrees
 ) where
 
@@ -39,8 +40,8 @@ import qualified NLP.Partage.DAG as DAG
 import qualified NLP.Partage.Auto as Auto
 import qualified NLP.Partage.Auto.Trie as Trie
 
-import qualified NLP.Partage4Xmg.Parse as P
-import qualified NLP.Partage4Xmg.ParseLex as PL
+import qualified NLP.Partage4Xmg.Grammar as P
+import qualified NLP.Partage4Xmg.Lexicon as PL
 
 
 --------------------------------------------------

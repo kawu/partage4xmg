@@ -3,7 +3,7 @@
 {-# LANGUAGE TupleSections     #-}
 
 
--- Parsing sentences from input and computing stats.
+-- | Parsing sentences from input and computing stats.
 
 
 module NLP.Partage4Xmg.Stats

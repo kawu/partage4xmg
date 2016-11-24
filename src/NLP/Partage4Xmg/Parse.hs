@@ -87,7 +87,9 @@ mkAutoFS gram =
 
 -- | Create an automaton from a list of lexicalized elementary trees.
 mkAuto :: [Ens.Tree T.Text] -> Earley.Auto T.Text T.Text Ens.ClosedFS
-mkAuto = mkAutoFS . map (, const $ Just [])
+mkAuto =
+  let dummy = C.Comp (const $ Just []) C.dummyTopDown
+  in  mkAutoFS . map (,dummy)
 
 
 -- | Parse the given sentence from the given start symbol with the given grammar.

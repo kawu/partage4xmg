@@ -161,7 +161,7 @@ getTrees BuildData{..} = do
 buildGram :: BuildData -> IO Gram
 buildGram buildData = do
   ts <- getTrees buildData
-  let dummy t = Just ()
+  let dummy = C.Comp (const $ Just ()) C.dummyTopDown
   return . DAG.mkGram . map (,dummy) . S.toList $ ts
 
 

@@ -316,8 +316,9 @@ anchorFS anc newFS (R.Node label@(typ, oldFS) xs) = case typ of
     Anchor _ -> do
       newFS' <- FS.reopen newFS
       fs <- FS.unifyFS oldFS newFS'
-      -- env <- E.get
-      -- trace (show oldFS) $ trace (show newFS') $ trace (show fs) $ trace (show env) $
+      env <- E.get
+--       trace (show newFS) $ trace (show oldFS) $
+--         trace (show newFS') $ trace (show fs) $ trace (show env) $
       return $ R.Node (O.Term (Term anc), fs) []
 
 

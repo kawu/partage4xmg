@@ -122,6 +122,10 @@ parseCfgOptions = P.ParseCfg
        -- <> value True
        <> help "Use FS unification"
        <> short 'u' )
+  <*> switch
+     (    long "derivations"
+       <> short 'd'
+       <> help "Print derivations instead of derived trees" )
 
 
 parseOptions :: Parser Command

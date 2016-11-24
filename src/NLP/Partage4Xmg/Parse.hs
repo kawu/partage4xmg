@@ -15,6 +15,7 @@ module NLP.Partage4Xmg.Parse
 import           Control.Monad              (forM_, unless, when)
 import           Control.Monad.Trans.Maybe
 
+import           Data.List                  (intercalate)
 import           Data.Maybe                 (maybeToList)
 import qualified Data.Map.Strict            as M
 import qualified Data.MemoCombinators       as Memo
@@ -30,9 +31,11 @@ import qualified Pipes.Prelude              as Pipes
 import qualified NLP.Partage.DAG            as DAG
 import qualified NLP.Partage.Earley         as Earley
 import qualified NLP.Partage.Tree           as Parsed
+import qualified NLP.Partage.FS             as FS
 import qualified NLP.Partage.Auto.Trie      as Trie
 import qualified NLP.Partage.Tree.Comp      as C
 import qualified NLP.Partage.Tree.Other     as O
+import qualified NLP.Partage.Earley.Deriv   as Deriv
 
 import qualified NLP.Partage4Xmg.Lexicon    as Lex
 import qualified NLP.Partage4Xmg.Morph      as Morph
@@ -55,6 +58,8 @@ data ParseCfg = ParseCfg
       -- ^ Print the set of parsed trees?
     , useFS       :: Bool
       -- ^ Use feature structures?
+    , printDeriv  :: Bool
+      -- ^ Print derivations instead of derived trees
     } deriving (Show, Read, Eq, Ord)
 
 
@@ -81,20 +86,18 @@ mkAutoFS gram =
 
 
 -- | Create an automaton from a list of lexicalized elementary trees.
-mkAuto :: [Ens.Tree T.Text] -> Earley.Auto T.Text T.Text ()
-mkAuto = mkAutoFS . map (, const $ Just ())
+mkAuto :: [Ens.Tree T.Text] -> Earley.Auto T.Text T.Text Ens.ClosedFS
+mkAuto = mkAutoFS . map (, const $ Just [])
 
 
 -- | Parse the given sentence from the given start symbol with the given grammar.
 parseWith
   :: Ens.Grammar
   -- ^ The TAG grammar
-  -> T.Text
-  -- ^ Start symbol
   -> [T.Text]
   -- ^ The sentence to parse
-  -> IO [Parsed.Tree T.Text T.Text]
-parseWith gram begSym sent0 = do
+  -> IO (Earley.Hype T.Text T.Text Ens.ClosedFS)
+parseWith gram sent0 = do
   let interps = map (Ens.getInterps gram . L.fromStrict) sent0
       elemTrees = concat
         [ map fst $ Ens.getTreesFS gram interp
@@ -103,7 +106,7 @@ parseWith gram begSym sent0 = do
       auto = mkAuto elemTrees
       input =
         [ S.fromList
-          . map (\interp -> (L.toStrict $ Morph.lemma interp, ()))
+          . map (\interp -> (L.toStrict $ Morph.lemma interp, []))
           . S.toList
           $ interpSet
         | interpSet <- interps ]
@@ -115,19 +118,17 @@ parseWith gram begSym sent0 = do
 --   forM_ input print
 
   -- parsing
-  Earley.parseAuto auto begSym . Earley.fromSets $ input
+  Earley.earleyAuto auto . Earley.fromSets $ input
 
 
 -- | Like `parseWith` but with FS unification.
 parseWithFS
   :: Ens.Grammar
   -- ^ The TAG grammar
-  -> T.Text
-  -- ^ Start symbol
   -> [T.Text]
   -- ^ The sentence to parse
-  -> IO [Parsed.Tree T.Text T.Text]
-parseWithFS gram begSym sent0 = do
+  -> IO (Earley.Hype T.Text T.Text Ens.ClosedFS)
+parseWithFS gram sent0 = do
   let interps = map (Ens.getInterps gram . L.fromStrict) sent0
       elemTrees = concat
         [ Ens.getTreesFS gram interp
@@ -143,7 +144,38 @@ parseWithFS gram begSym sent0 = do
           . S.toList
           $ interpSet
         | interpSet <- interps ]
-  Earley.parseAuto auto begSym . Earley.fromSets $ input
+  -- Earley.parseAuto auto begSym . Earley.fromSets $ input
+  Earley.earleyAuto auto . Earley.fromSets $ input
+
+
+-- -- -- | Like `parseWith` but with FS unification.
+-- -- parseWithFS'
+-- --   :: Ens.Grammar
+-- --   -- ^ The TAG grammar
+-- --   -> T.Text
+-- --   -- ^ Start symbol
+-- --   -> [T.Text]
+-- --   -- ^ The sentence to parse
+-- --   -> IO [Deriv.TokDeriv T.Text T.Text (FS.ClosedFS T.Text T.Text)]
+-- parseWithFS' gram begSym sent0 = do
+--   let interps = map (Ens.getInterps gram . L.fromStrict) sent0
+--       elemTrees = concat
+--         [ Ens.getTreesFS gram interp
+--         | interpSet <- interps
+--         , interp <- S.toList interpSet ]
+--       auto = mkAutoFS elemTrees
+--       input =
+--         [ S.fromList
+--           . map (\interp ->
+--                    ( L.toStrict $ Morph.lemma interp
+--                    , Ens.closeAVM $ Morph.avm interp )
+--                 )
+--           . S.toList
+--           $ interpSet
+--         | interpSet <- interps ]
+--   Earley.earleyAuto auto . Earley.fromSets $ input
+--   -- return $ Deriv.derivTrees hype begSym (length input)
+
 
 
 --------------------------------------------------
@@ -162,6 +194,51 @@ parseAll ParseCfg{..} gramCfg = do
   lines <- map L.toStrict . L.lines <$> L.getContents
   let parseIt = if useFS then parseWithFS else parseWith
   forM_ lines $ \line -> do
-    parseSet <- parseIt gram (T.pack startSym) (T.words line)
-    forM_ (take printParsed $ parseSet) $ \t -> do
-      putStrLn . R.drawTree . fmap show . O.encode . Left $ t
+    let begSym = T.pack startSym
+        input  = T.words line
+    hype <- parseIt gram input
+    if printDeriv then do
+      let parseSet = Deriv.derivTrees hype begSym (length input)
+      forM_ (take printParsed $ parseSet) $ \t0 -> do
+        let t = fmap (fmap showClosedFS) t0
+        putStrLn . R.drawTree . fmap show . Deriv.deriv4show $ t
+    else do
+      let parseSet = Earley.parsedTrees hype begSym (length input)
+      forM_ (take printParsed $ parseSet) $ \t -> do
+        putStrLn . R.drawTree . fmap show . O.encode . Left $ t
+
+
+-- -- | Read the grammar from the input file, sentences to parse from
+-- -- std input, and perform the experiment.
+-- parseAll'
+--   :: ParseCfg
+--   -> Ens.GramCfg
+--   -> IO ()
+-- parseAll' ParseCfg{..} gramCfg = do
+--   gram <- Ens.readGrammar gramCfg
+--   lines <- map L.toStrict . L.lines <$> L.getContents
+--   let parseIt = parseWithFS'
+--   forM_ lines $ \line -> do
+--     parseSet <- parseIt gram (T.pack startSym) (T.words line)
+--     forM_ (take printParsed $ parseSet) $ \t -> do
+--       putStrLn . R.drawTree . fmap show . O.encode . Left $ t
+
+
+--------------------------------------------------
+-- Utils
+--------------------------------------------------
+
+
+showClosedFS :: Ens.ClosedFS -> String
+showClosedFS
+  = between "{" "}"
+  . intercalate ","
+  . map showPair
+  where
+    showPair (keySet, mayValAlt) = showKeys keySet ++ "=" ++
+      case mayValAlt of
+        Nothing  -> "_"
+        Just alt -> showVals alt
+    showKeys = intercalate "&" . map T.unpack . S.toList
+    showVals = intercalate "|" . map T.unpack . S.toList
+    between x y z = x ++ z ++ y

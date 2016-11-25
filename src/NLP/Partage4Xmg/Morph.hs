@@ -9,20 +9,32 @@ module NLP.Partage4Xmg.Morph
 ( Morph (..)
 , Ana (..)
 , lemma
+-- * Parsing
+-- ** From XML
 , parseMorph
 , readMorph
 , printMorph
+-- ** From .mph
+, parseMorphMph
+, readMorphMph
+, printMorphMph
 ) where
 
 
-import           Control.Applicative ((<|>))
+import Debug.Trace (trace)
+
+import           Control.Applicative ((<|>), many, optional)
 import           Control.Monad       ((<=<))
 
+import           Data.Function       (on)
+import           Data.List           (groupBy)
 import qualified Data.Set            as S
 import qualified Data.Map.Strict     as M
+-- import qualified Data.Char           as C
 import qualified Data.Text.Lazy      as L
 import qualified Data.Text.Lazy.IO   as L
 import qualified Data.Foldable       as F
+import qualified Data.Attoparsec.Text.Lazy as A
 
 import qualified Text.HTML.TagSoup   as TagSoup
 import           Text.XML.PolySoup   hiding (P, Q, name)
@@ -67,7 +79,7 @@ lemma = Lex.lemma . word
 
 
 -------------------------------------------------
--- Parsing
+-- Parsing XML
 -------------------------------------------------
 
 
@@ -83,11 +95,9 @@ allQ = true //> morphQ
 
 -- | Entry parser.
 morphQ :: Q Morph
-morphQ = (named "morph" *> lex) `join` \form -> do
+morphQ = (named "morph" *> attr "lex") `join` \form -> do
   Morph form . S.fromList <$>
     every' lemmaRefQ
-  where
-    lex = attr "lex"
 
 
 lemmaRefQ :: Q Ana
@@ -106,18 +116,18 @@ lemmaRefQ = do
 
 -- | AVM parser.
 avmQ :: Q G.AVM
-avmQ = M.fromList <$> joinR (named "fs") (every' attrValQ)
+avmQ = M.fromList <$> joinR (named "fs") (every' G.attrValQ)
 
 
--- | An attribute/value parser.
-attrValQ :: Q (G.Attr, Either G.Val G.Var)
-attrValQ = join (named "f" *> attr "name") $ \atr -> do
-  valVar <- first $ (Left <$> valQ)
-                <|> (Right <$> varQ)
-  return (atr, valVar)
-  where
-    valQ = node $ named "sym" *> attr "value"
-    varQ = node $ named "sym" *> attr "varname"
+-- -- | An attribute/value parser.
+-- attrValQ :: Q (G.Attr, Either G.Val G.Var)
+-- attrValQ = join (named "f" *> attr "name") $ \atr -> do
+--   valVar <- first $ (Left <$> valQ)
+--                 <|> (Right <$> varQ)
+--   return (atr, valVar)
+--   where
+--     valQ = node $ named "sym" *> attr "value"
+--     varQ = node $ named "sym" *> attr "varname"
 
 
 -- | Parse textual contents of the French TAG XML file.
@@ -133,3 +143,104 @@ readMorph path = parseMorph <$> L.readFile path
 printMorph :: FilePath -> IO ()
 printMorph =
     mapM_ print <=< readMorph
+
+
+-------------------------------------------------
+-- Parsing .mph
+-------------------------------------------------
+
+
+printMorphMph :: FilePath -> IO ()
+printMorphMph =
+    mapM_ print <=< readMorphMph
+
+
+-- | Parse the stand-alone French TAG xml file.
+readMorphMph :: FilePath -> IO [Morph]
+readMorphMph path = parseMorphMph <$> L.readFile path
+
+
+-- | Parse the stand-alone French TAG xml file.
+parseMorphMph :: L.Text -> [Morph]
+parseMorphMph
+  = map fromGroup
+  . groupBy ((==) `on` wordform)
+  . map parseMph
+  . filter (not . useless)
+  . map L.strip
+  . L.lines
+  where
+    fromGroup xs@(x:_) = Morph (wordform x) (S.unions $ map analyzes xs)
+    fromGroup [] = error "parseMorphMph: impossible happened"
+    useless line = case L.uncons line of
+      Just (x, _) -> x == '%'
+      Nothing -> True
+
+
+-- | Parse .mph line.
+parseMph :: L.Text -> Morph
+parseMph line =
+  check . A.maybeResult . A.parse mphA $ line
+  where
+    check Nothing  = trace (show line) $ error "parseMph: no parse"
+    check (Just x) = x
+    justLeft (Just (Left x)) = x
+    justLeft _ = error "parseMph.justLeft: impossible happened"
+    pick s = case S.toList s of
+      [x] -> x
+      _ -> error "parseMph.pick: impossible happened 2"
+    mphA = do
+      form <- wordA <* many_ A.space
+      base <- wordA <* many_ A.space
+      avmTxt <- L.strip <$> A.takeLazyText
+      let ana = Ana
+            { word = Lex.Word
+              { Lex.lemma = base
+              , Lex.cat = (pick . justLeft) (M.lookup "pos" avm0) }
+            , avm = avm0 }
+          avm0 = parseAvm avmTxt
+      return $ Morph
+        { wordform = form
+        , analyzes = S.singleton ana }
+
+
+-- | Parse AVM.
+parseAvm :: L.Text -> G.AVM
+parseAvm x =
+  check . A.maybeResult . A.parse avmA $ x
+  where
+    check Nothing  = trace (show x) $ error "parseAvm: no parse"
+    check (Just x) = x
+
+
+-- | AVM attoparsec.
+avmA :: A.Parser G.AVM
+avmA = do
+  xs <- between "[" "]" $ many (attrValA <* optional (A.char ';'))
+  return $ M.fromList xs
+  where
+    between p q x = p *> x <* q
+
+
+attrValA :: A.Parser (L.Text, Either G.Val G.Var)
+attrValA = do
+  x <- many_ A.space *> idenA
+  many_ A.space *> A.char '='
+  y <- valA
+  return (x, Left y)
+
+
+valA :: A.Parser G.Val
+valA = do
+  xs <- (many_ A.space *> idenA <* many_ A.space) `A.sepBy1'` (A.char '|')
+  return $ S.fromList xs
+
+
+-- | A single identifier or value.
+idenA :: A.Parser L.Text
+idenA = L.pack <$> many (A.letter <|> A.digit <|> A.char '+' <|> A.char '-')
+
+
+-- | A word.
+wordA :: A.Parser L.Text
+wordA = L.pack <$> many (A.letter <|> A.digit <|> A.char '\'')

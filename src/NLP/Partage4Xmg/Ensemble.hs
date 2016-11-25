@@ -278,12 +278,9 @@ convertFS (R.Node G.NonTerm{..} xs) =
 -- | Convert an XMG-style AVM to a FS.
 convertAVM :: G.AVM -> E.StateT VarMap (Env.EnvM Val) (FS.FS Key Val)
 convertAVM avm = fmap M.fromList . runListT $ do
-  (key, valVar) <-
-    first L.toStrict .
-    second (onLeft L.toStrict)
-    <$> each (M.toList avm)
+  (key, valVar) <- first L.toStrict <$> each (M.toList avm)
   case valVar of
-    Left val -> return (key, FS.Val . S.singleton $ val)
+    Left val -> return (key, FS.Val . S.fromList . map L.toStrict $ S.toList val)
     Right var0 -> do
       var <- P.lift $ varFor var0
       return (key, FS.Var var)

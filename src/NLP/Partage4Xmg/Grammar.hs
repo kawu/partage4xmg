@@ -23,6 +23,9 @@ module NLP.Partage4Xmg.Grammar
 , parseGrammar
 , readGrammar
 , printGrammar
+
+-- * Utils
+, attrValQ
 ) where
 
 
@@ -35,6 +38,7 @@ import qualified Data.Foldable       as F
 import qualified Data.Text.Lazy      as L
 import qualified Data.Text.Lazy.IO   as L
 import qualified Data.Tree           as R
+import qualified Data.Set            as S
 import qualified Data.Map.Strict     as M
 
 import qualified Text.HTML.TagSoup   as TagSoup
@@ -70,7 +74,7 @@ type Attr = L.Text
 
 
 -- | Attribute value.
-type Val = L.Text
+type Val = S.Set L.Text
 
 
 -- | Variable.
@@ -156,14 +160,19 @@ nodeQ = (named "node" *> attr "type") `join` ( \typTxt -> R.Node
 -- | Non-terminal parser.
 nonTermQ :: L.Text -> Q NonTerm
 nonTermQ typ' = joinR (named "narg") $
-    first $ joinR (named "fs") $ do
-        -- sym' <- first symQ
-        avm' <- avmP
-        -- top' <- optional $ first $ avmQ "top"
-        -- bot' <- optional $ first $ avmQ "bot"
-        -- return $ NonTerm (parseTyp typ') sym' avm'
-        let sym' = maybe "" id (takeLeft =<< M.lookup "cat" avm')
-        return $ NonTerm (parseTyp typ') sym' avm'
+  first $ joinR (named "fs") $ do
+    -- sym' <- first symQ
+    avm' <- avmP
+    -- top' <- optional $ first $ avmQ "top"
+    -- bot' <- optional $ first $ avmQ "bot"
+    -- return $ NonTerm (parseTyp typ') sym' avm'
+    let sym' = pick (takeLeft =<< M.lookup "cat" avm')
+    return $ NonTerm (parseTyp typ') sym' avm'
+  where
+    pick (Just s) = case S.toList s of
+      [x] -> x
+      _ -> error "nonTermQ: impossible happened"
+    pick Nothing = error "nonTermQ: impossible happened 2"
 
 
 -- | Syntagmatic value parser.
@@ -194,7 +203,7 @@ attrValQ = join (named "f" *> attr "name") $ \atr -> do
 
 -- | Attribute value parser.
 valQ :: Q Val
-valQ = node $ named "sym" *> attr "value"
+valQ = node $ named "sym" *> (S.singleton <$> attr "value")
 
 
 -- | Attribute variable parser.

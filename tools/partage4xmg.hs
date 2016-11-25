@@ -32,7 +32,7 @@ data Command
     -- ^ Parse and show the input grammar
     | Lexicon FilePath
     -- ^ Parse and print lexicon
-    | Morph FilePath
+    | Morph FilePath Bool
     -- ^ Parse and print morphology
     | Trees B.BuildData
     -- ^ Only parse and show elementary grammar trees, with no FSs
@@ -172,6 +172,10 @@ morphOptions = Morph
     <> short 'm'
     <> metavar "FILE"
     <> help "Morphology .xml file" )
+  <*> switch
+     ( long "mph"
+    <> short 'h'
+    <> help "Use the alternative .mph format" )
 
 
 --------------------------------------------------
@@ -258,8 +262,10 @@ run cmd = case cmd of
             G.printGrammar grammarPath
          Lexicon lexPath ->
             L.printLexicon lexPath
-         Morph path ->
-            Morph.printMorph path
+         Morph path useMph ->
+           if useMph
+           then Morph.printMorphMph path
+           else Morph.printMorph path
          Print buildData ->
             B.printTrees buildData
          Stats buildData cfg ->

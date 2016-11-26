@@ -9,7 +9,7 @@ import qualified Data.Char as C
 -- import qualified NLP.Partage4Xmg.Automat as A
 import qualified NLP.Partage4Xmg.Build as B
 import qualified NLP.Partage4Xmg.Grammar as G
-import qualified NLP.Partage4Xmg.Lexicon as L
+import qualified NLP.Partage4Xmg.Lexicon as Lex
 import qualified NLP.Partage4Xmg.Morph as Morph
 import qualified NLP.Partage4Xmg.Ensemble as E
 import qualified NLP.Partage4Xmg.Parse as P
@@ -28,9 +28,9 @@ data Command
     = Build B.BuildData
     -- ^ Build an automaton
     -- | Parse -- ParseOptions
-    | Grammar FilePath
+    | Grammar FilePath Bool
     -- ^ Parse and show the input grammar
-    | Lexicon FilePath
+    | Lexicon FilePath Bool
     -- ^ Parse and print lexicon
     | Morph FilePath Bool
     -- ^ Parse and print morphology
@@ -87,16 +87,28 @@ gramCfgOptions = E.GramCfg
        <> short 'm'
        <> metavar "FILE"
        <> help "Morphology .xml file" )
+  <*> switch
+     ( long "mph-format"
+    <> short 'h'
+    <> help "Use the alternative .mph format" )
   <*> strOption
         ( long "lexicon"
        <> short 'l'
        <> metavar "FILE"
        <> help "Lexicon .xml file" )
+  <*> switch
+     ( long "lex-format"
+    <> short 'x'
+    <> help "Use the alternative .lex format" )
   <*> strOption
         ( long "grammar"
        <> short 'g'
        <> metavar "FILE"
        <> help "Grammar .xml file" )
+  <*> switch
+     ( long "rm-phon"
+    <> short 'r'
+    <> help "Remove phonologically empty nodes" )
 
 
 parseCfgOptions :: Parser P.ParseCfg
@@ -144,6 +156,10 @@ grammarOptions = Grammar
     <> short 'g'
     <> metavar "FILE"
     <> help "Grammar .xml file" )
+  <*> switch
+     ( long "rm-phon"
+    <> short 'r'
+    <> help "Remove phonologically empty nodes" )
 
 
 --------------------------------------------------
@@ -158,6 +174,10 @@ lexicOptions = Lexicon
     <> short 'l'
     <> metavar "FILE"
     <> help "Lexicon .xml file" )
+  <*> switch
+     ( long "lex-format"
+    <> short 'x'
+    <> help "Use the alternative .lex format" )
 
 
 --------------------------------------------------
@@ -173,7 +193,7 @@ morphOptions = Morph
     <> metavar "FILE"
     <> help "Morphology .xml file" )
   <*> switch
-     ( long "mph"
+     ( long "mph-format"
     <> short 'h'
     <> help "Use the alternative .mph format" )
 
@@ -258,10 +278,12 @@ run cmd = case cmd of
             B.printAuto buildData
          Trees buildData ->
             B.printTrees buildData
-         Grammar grammarPath ->
-            G.printGrammar grammarPath
-         Lexicon lexPath ->
-            L.printLexicon lexPath
+         Grammar grammarPath rmPhon ->
+            G.printGrammar rmPhon grammarPath
+         Lexicon lexPath useLex ->
+           if useLex
+           then Lex.printLexiconLex lexPath
+           else Lex.printLexicon lexPath
          Morph path useMph ->
            if useMph
            then Morph.printMorphMph path

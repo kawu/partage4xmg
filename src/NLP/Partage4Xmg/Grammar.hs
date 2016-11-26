@@ -26,13 +26,18 @@ module NLP.Partage4Xmg.Grammar
 
 -- * Utils
 , attrValQ
+, rmPhonEps
 ) where
 
 
+import Debug.Trace (trace)
+
+import           Control.Arrow       (second)
 import           Control.Applicative ((*>), (<$>), (<*>),
                         optional, (<|>))
 import           Control.Monad ((<=<))
 
+import           Data.Maybe          (mapMaybe)
 import qualified Data.Foldable       as F
 -- import qualified Data.Text           as T
 import qualified Data.Text.Lazy      as L
@@ -99,10 +104,13 @@ data Type
 type SubType = L.Text
 
 
--- | Non-terminal.
+-- | Non-terminal or terminal.
+-- TODO: change the name.
 data NonTerm = NonTerm
     { typ   :: Type
     , sym   :: Sym
+    , phonEps :: Bool
+      -- ^ Phonetically empty?
     , avm   :: AVM }
 --     , top   :: Maybe AVM
 --     , bot   :: Maybe AVM }
@@ -115,6 +123,21 @@ type Tree = R.Tree NonTerm
 
 -- | Name of a tree family.
 type Family = L.Text
+
+
+-------------------------------------------------
+-- Phon
+-------------------------------------------------
+
+
+-- | Remove phonologically empty nodes (and the corresponding subtrees)
+rmPhonEps :: Tree -> Maybe (Tree)
+rmPhonEps t
+  | phonEps (R.rootLabel t) = Nothing
+  | null (R.subForest t) = Just t
+  | otherwise = case mapMaybe rmPhonEps (R.subForest t) of
+      [] -> Nothing
+      xs -> Just $ t {R.subForest = xs}
 
 
 -------------------------------------------------
@@ -166,8 +189,16 @@ nonTermQ typ' = joinR (named "narg") $
     -- top' <- optional $ first $ avmQ "top"
     -- bot' <- optional $ first $ avmQ "bot"
     -- return $ NonTerm (parseTyp typ') sym' avm'
-    let sym' = pick (takeLeft =<< M.lookup "cat" avm')
-    return $ NonTerm (parseTyp typ') sym' avm'
+    -- TODO: below, a provisional solution with @phon!
+    let getCat = M.lookup "cat" avm' <|> M.lookup "phon" avm'
+        sym' = pick (takeLeft =<< getCat)
+        pho' = case M.lookup "phon" avm' of
+          Nothing -> False
+          Just (Left s) -> case S.toList s of
+            ["e"] -> True
+            _  -> error "nodeTermQ: unknown phon value"
+          _  -> error "nodeTermQ: phon variable?"
+    return $ NonTerm (parseTyp typ') sym' pho' avm'
   where
     pick (Just s) = case S.toList s of
       [x] -> x
@@ -228,16 +259,28 @@ parseGrammar =
 
 
 -- | Parse the stand-alone French TAG xml file.
-readGrammar :: FilePath -> IO [(Family, Tree)]
-readGrammar path = parseGrammar <$> L.readFile path
+readGrammar
+  :: Bool
+     -- ^ Remove phonologically empty nodes
+  -> FilePath -> IO [(Family, Tree)]
+readGrammar rmPhon path = do
+  xs <- parseGrammar <$> L.readFile path
+  return $
+    [ (fam, tree)
+    | (fam, Just tree) <- map (second remPhon) xs ]
+  where
+    remPhon = if rmPhon then rmPhonEps else Just
 
 
-printGrammar :: FilePath -> IO ()
-printGrammar =
+printGrammar
+  :: Bool
+     -- ^ Remove phonologically empty nodes
+  -> FilePath -> IO ()
+printGrammar rmPhon =
   let printTree (famName, t) = do
         putStrLn $ "### " ++ show famName ++ " ###"
         putStrLn . R.drawTree . fmap show $ t
-  in  mapM_ printTree <=< readGrammar
+  in  mapM_ printTree <=< readGrammar rmPhon
 
 
 -------------------------------------------------

@@ -172,17 +172,27 @@ closeAVM avm = maybe [] id . fst . Env.runEnvM $ do
 -- | Grammar configuration.
 data GramCfg = GramCfg
   { morphPath :: FilePath
+  , useMph    :: Bool
+    -- ^ Use the alternative .mph format
   , lexPath   :: FilePath
+  , useLex    :: Bool
+    -- ^ Use the alternative .lex format
   , treePath  :: FilePath
+  , rmPhonEps :: Bool
+    -- ^ Remove phonologically empty nodes (and the corresponding subtrees)
   } deriving (Show, Read, Eq, Ord)
 
 
 -- | Read the grammar given the configuration.
 readGrammar :: GramCfg -> IO Grammar
 readGrammar GramCfg{..} = do
-  xs <- Morph.readMorph morphPath
-  ys <- Lex.readLexicon lexPath
-  zs <- G.readGrammar treePath
+  xs <- if useMph
+    then Morph.readMorphMph morphPath
+    else Morph.readMorph morphPath
+  ys <- if useLex
+    then Lex.readLexiconLex lexPath
+    else Lex.readLexicon lexPath
+  zs <- G.readGrammar rmPhonEps treePath
   return Grammar
     { morphMap = M.fromList
       [ (Morph.wordform x, Morph.analyzes x)

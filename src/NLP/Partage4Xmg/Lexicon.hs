@@ -8,9 +8,16 @@
 module NLP.Partage4Xmg.Lexicon
 ( Word (..)
 , Entry
+
+-- * Parsing
+-- ** XML
 , parseLexicon
 , readLexicon
 , printLexicon
+-- ** Lex
+, parseLexiconLex
+, readLexiconLex
+, printLexiconLex
 ) where
 
 
@@ -19,6 +26,8 @@ import           Control.Applicative ((*>), (<$>), (<*>),
                         optional, (<|>))
 import           Control.Monad ((<=<))
 
+import           Data.Maybe          (mapMaybe)
+import           Data.List           (groupBy)
 import qualified Data.Foldable       as F
 -- import qualified Data.Text           as T
 import qualified Data.Text.Lazy      as L
@@ -30,6 +39,7 @@ import qualified Data.Map.Strict     as M
 import qualified Text.HTML.TagSoup   as TagSoup
 import           Text.XML.PolySoup   hiding (P, Q)
 import qualified Text.XML.PolySoup   as PolySoup
+import qualified Data.Attoparsec.Text.Lazy as A
 
 import           NLP.Partage4Xmg.Grammar (Family)
 
@@ -125,3 +135,71 @@ readLexicon path = parseLexicon <$> L.readFile path
 printLexicon :: FilePath -> IO ()
 printLexicon =
     mapM_ print <=< readLexicon
+
+
+-------------------------------------------------
+-- Parsing Lex
+-------------------------------------------------
+
+
+printLexiconLex :: FilePath -> IO ()
+printLexiconLex =
+    mapM_ print <=< readLexiconLex
+
+
+-- | Parse the stand-alone French TAG xml file.
+readLexiconLex :: FilePath -> IO [Entry]
+readLexiconLex path = parseLexiconLex <$> L.readFile path
+
+
+-- | Parse textual contents of the French TAG XML file.
+parseLexiconLex :: L.Text -> [Entry]
+parseLexiconLex
+  = mapMaybe parseEntry
+  . map L.strip
+  . L.splitOn "\n\n"
+--   where
+--     fromGroup xs@(x:_) = Morph (wordform x) (S.unions $ map analyzes xs)
+--     fromGroup [] = error "parseMorphMph: impossible happened"
+--     comment line = case L.uncons line of
+--       Just (x, _) -> x == '%'
+--       _ -> False
+--     useless line = case L.uncons line of
+--       Just (x, _) -> x == '%'
+--       Nothing -> True
+
+
+-- | Return `Nothing` if a comment.
+parseEntry :: L.Text -> Maybe Entry
+parseEntry
+  = fmap analyze
+  . sections
+  . filter (not . useless . L.strip)
+  . L.lines
+  where
+    sections [] = Nothing
+    sections xs = Just (parseSections xs)
+    analyze m =
+      let word = Word
+            { lemma = look "ENTRY" m
+            , cat = look "CAT" m }
+          famSet = S.fromList . L.words $ look "FAM" m
+      in  (word, famSet)
+    look x m = case M.lookup x m of
+      Nothing -> error $ "parseEntry: " ++ L.unpack x ++ " not found"
+      Just y  -> y
+    useless line = case L.uncons line of
+      Just (x, _) -> x == '%'
+      Nothing -> True
+
+
+-- | Parse the individual lines of an entry and return a map of its sections.
+parseSections :: [L.Text] -> M.Map L.Text L.Text
+parseSections
+  = M.fromList
+  . map parseGroup
+  . groupBy (\_ y -> not $ "*" `L.isPrefixOf` y)
+  where
+    parseGroup (x : xs) =
+      let (name, val1) = L.breakOn ":" (L.drop 1 x)
+       in (name, L.strip . L.unlines $ L.drop 1 val1 : xs)

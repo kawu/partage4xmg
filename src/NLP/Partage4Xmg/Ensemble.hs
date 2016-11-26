@@ -30,6 +30,7 @@ module NLP.Partage4Xmg.Ensemble
 
 -- import Debug.Trace (trace)
 
+import           Control.Applicative        ((<|>))
 import           Control.Arrow              (first, second)
 import qualified Control.Monad.State.Strict as E
 
@@ -109,14 +110,14 @@ type ClosedFS = FS.ClosedFS Key Val
 
 -- | All the components of a grammar.
 data Grammar = Grammar
-  { morphMap :: M.Map L.Text (S.Set Morph.Ana)
+  { morphMap :: M.Map T.Text (S.Set Morph.Ana)
   , lexMap   :: M.Map Lex.Word (S.Set G.Family)
   , treeMap  :: M.Map G.Family (S.Set G.Tree)
   }
 
 
 -- | Map a given word to the set of its possible interpretations.
-getInterps :: Grammar -> L.Text -> S.Set Morph.Ana
+getInterps :: Grammar -> T.Text -> S.Set Morph.Ana
 getInterps Grammar{..} orth = case M.lookup orth morphMap of
   Nothing -> S.empty
   Just x  -> x
@@ -150,7 +151,7 @@ getTreesFS gram ana
   $ _getTrees gram ana
   where
     process tree = splitFSTree . fmap simplifyFS $ do
-      let term = L.toStrict (Morph.lemma ana)
+      let term = Morph.lemma ana
       converted <- withVarMap (convertFS tree)
       let fs = closeAVM (Morph.avm ana)
       anchorFS term fs converted
@@ -178,8 +179,6 @@ data GramCfg = GramCfg
   , useLex    :: Bool
     -- ^ Use the alternative .lex format
   , treePath  :: FilePath
-  , rmPhonEps :: Bool
-    -- ^ Remove phonologically empty nodes (and the corresponding subtrees)
   } deriving (Show, Read, Eq, Ord)
 
 
@@ -192,15 +191,17 @@ readGrammar GramCfg{..} = do
   ys <- if useLex
     then Lex.readLexiconLex lexPath
     else Lex.readLexicon lexPath
-  zs <- G.readGrammar rmPhonEps treePath
+  -- zs <- G.readGrammar treePath
+  treeMap' <- G.readGrammar treePath
   return Grammar
     { morphMap = M.fromList
       [ (Morph.wordform x, Morph.analyzes x)
       | x <- xs ]
     , lexMap = M.fromList ys
-    , treeMap = M.fromListWith S.union
-      [ (famName, S.singleton tree)
-      | (famName, tree) <- zs ]
+    , treeMap = treeMap'
+--     , treeMap = M.fromListWith S.union
+--       [ (famName, S.singleton tree)
+--       | (famName, tree) <- zs ]
     }
 
 
@@ -265,32 +266,31 @@ simplifyFS = fmap $ first simplifyNode
 convertFS :: G.Tree -> E.StateT VarMap (Env.EnvM Val) (FSTree ATerm)
 convertFS (R.Node G.NonTerm{..} xs) =
   case typ of
-    G.Std -> below $ O.NonTerm sym'
-    G.Foot -> leaf $ O.Foot sym'
-    -- TODO: FS assigned to the anchor should unify with the one assigned
-    -- to the terminal in the morphology file.
+    G.Std -> below $ O.NonTerm sym
+    G.Foot -> leaf $ O.Foot sym
     G.Anchor -> do
       fs <- convertAVM avm
-      theLeaf <- leaf . O.Term $ Anchor sym'
-      return $ R.Node (O.NonTerm sym', fs) [theLeaf]
-    G.Lex -> leaf . O.Term $ Term sym'
-    G.Other _ -> below $ O.NonTerm sym'
+      theLeaf <- leaf . O.Term $ Anchor sym
+      return $ R.Node (O.NonTerm sym, fs) [theLeaf]
+    G.Lex -> leaf . O.Term $ Term sym
+    G.Other _ -> below $ O.NonTerm sym
   where
+    -- TODO: provisional solutino, top and bot should be distinguished
+    avm = maybe M.empty id (top <|> bot)
     below x = do
       fs <- convertAVM avm
       R.Node (x, fs) <$> mapM convertFS xs
     leaf x = do
       fs <- convertAVM avm
       return $ R.Node (x, fs) []
-    sym' = L.toStrict sym
 
 
 -- | Convert an XMG-style AVM to a FS.
 convertAVM :: G.AVM -> E.StateT VarMap (Env.EnvM Val) (FS.FS Key Val)
 convertAVM avm = fmap M.fromList . runListT $ do
-  (key, valVar) <- first L.toStrict <$> each (M.toList avm)
+  (key, valVar) <- each (M.toList avm)
   case valVar of
-    Left val -> return (key, FS.Val . S.fromList . map L.toStrict $ S.toList val)
+    Left val -> return (key, FS.Val . S.fromList $ S.toList val)
     Right var0 -> do
       var <- P.lift $ varFor var0
       return (key, FS.Var var)

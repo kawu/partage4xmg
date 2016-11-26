@@ -100,7 +100,7 @@ parseWith
   -- ^ The sentence to parse
   -> IO (Earley.Hype T.Text T.Text Ens.ClosedFS)
 parseWith gram sent0 = do
-  let interps = map (Ens.getInterps gram . L.fromStrict) sent0
+  let interps = map (Ens.getInterps gram) sent0
       elemTrees = concat
         [ map fst $ Ens.getTreesFS gram interp
         | interpSet <- interps
@@ -108,7 +108,7 @@ parseWith gram sent0 = do
       auto = mkAuto elemTrees
       input =
         [ S.fromList
-          . map (\interp -> (L.toStrict $ Morph.lemma interp, []))
+          . map (\interp -> (Morph.lemma interp, []))
           . S.toList
           $ interpSet
         | interpSet <- interps ]
@@ -131,7 +131,7 @@ parseWithFS
   -- ^ The sentence to parse
   -> IO (Earley.Hype T.Text T.Text Ens.ClosedFS)
 parseWithFS gram sent0 = do
-  let interps = map (Ens.getInterps gram . L.fromStrict) sent0
+  let interps = map (Ens.getInterps gram) sent0
       elemTrees = concat
         [ Ens.getTreesFS gram interp
         | interpSet <- interps
@@ -140,7 +140,7 @@ parseWithFS gram sent0 = do
       input =
         [ S.fromList
           . map (\interp ->
-                   ( L.toStrict $ Morph.lemma interp
+                   ( Morph.lemma interp
                    , Ens.closeAVM $ Morph.avm interp )
                 )
           . S.toList

@@ -7,7 +7,7 @@ import qualified Data.Char as C
 
 
 -- import qualified NLP.Partage4Xmg.Automat as A
-import qualified NLP.Partage4Xmg.Build as B
+-- import qualified NLP.Partage4Xmg.Build as B
 import qualified NLP.Partage4Xmg.Grammar as G
 import qualified NLP.Partage4Xmg.Lexicon as Lex
 import qualified NLP.Partage4Xmg.Morph as Morph
@@ -15,7 +15,7 @@ import qualified NLP.Partage4Xmg.Ensemble as E
 import qualified NLP.Partage4Xmg.Parse as P
 -- import qualified NLP.Partage4Xmg.Gen as G
 -- import qualified NLP.Partage4Xmg.GenLex as GL
-import qualified NLP.Partage4Xmg.Stats as S
+-- import qualified NLP.Partage4Xmg.Stats as S
 -- import qualified NLP.Partage4Xmg.Select as S
 
 
@@ -25,23 +25,23 @@ import qualified NLP.Partage4Xmg.Stats as S
 
 
 data Command
-    = Build B.BuildData
-    -- ^ Build an automaton
+--     = Build B.BuildData
+--     -- ^ Build an automaton
     -- | Parse -- ParseOptions
-    | Grammar FilePath Bool
+    = Grammar FilePath
     -- ^ Parse and show the input grammar
     | Lexicon FilePath Bool
     -- ^ Parse and print lexicon
     | Morph FilePath Bool
     -- ^ Parse and print morphology
-    | Trees B.BuildData
-    -- ^ Only parse and show elementary grammar trees, with no FSs
-    | Stats B.BuildData S.StatCfg
-    -- ^ Parse sentences from stdin (one sentence per line)
-    | Print B.BuildData
-    -- ^ Print trees (lexicon allowed, FSs removed)
-    | Rules B.BuildData
-    -- ^ Experimental mode
+--     | Trees B.BuildData
+--     -- ^ Only parse and show elementary grammar trees, with no FSs
+--     | Stats B.BuildData S.StatCfg
+--     -- ^ Parse sentences from stdin (one sentence per line)
+--     | Print B.BuildData
+--     -- ^ Print trees (lexicon allowed, FSs removed)
+--     | Rules B.BuildData
+--     -- ^ Experimental mode
     | Parse E.GramCfg P.ParseCfg
     -- ^ Experimental mode
 
@@ -56,23 +56,23 @@ data Command
 --     _           -> B.Auto
 
 
-buildOptions :: Parser B.BuildData
-buildOptions = B.BuildData
-  <$> strOption
-        ( long "grammar"
-       <> short 'g'
-       <> metavar "FILE"
-       <> help "Grammar .xml file" )
-  <*> strOption
-        ( long "lexicon"
-       <> short 'l'
-       <> metavar "FILE"
-       <> help "Lexicon .xml file" )
-  <*> ( optional . strOption )
-        ( long "auxiliary"
-       <> short 'a'
-       <> metavar "FILE"
-       <> help "Auxiliary grammar/lexicon .xml file" )
+-- buildOptions :: Parser B.BuildData
+-- buildOptions = B.BuildData
+--   <$> strOption
+--         ( long "grammar"
+--        <> short 'g'
+--        <> metavar "FILE"
+--        <> help "Grammar .xml file" )
+--   <*> strOption
+--         ( long "lexicon"
+--        <> short 'l'
+--        <> metavar "FILE"
+--        <> help "Lexicon .xml file" )
+--   <*> ( optional . strOption )
+--         ( long "auxiliary"
+--        <> short 'a'
+--        <> metavar "FILE"
+--        <> help "Auxiliary grammar/lexicon .xml file" )
 
 
 --------------------------------------------------
@@ -105,10 +105,6 @@ gramCfgOptions = E.GramCfg
        <> short 'g'
        <> metavar "FILE"
        <> help "Grammar .xml file" )
-  <*> switch
-     ( long "rm-phon"
-    <> short 'r'
-    <> help "Remove phonologically empty nodes" )
 
 
 parseCfgOptions :: Parser P.ParseCfg
@@ -156,10 +152,6 @@ grammarOptions = Grammar
     <> short 'g'
     <> metavar "FILE"
     <> help "Grammar .xml file" )
-  <*> switch
-     ( long "rm-phon"
-    <> short 'r'
-    <> help "Remove phonologically empty nodes" )
 
 
 --------------------------------------------------
@@ -203,26 +195,26 @@ morphOptions = Morph
 --------------------------------------------------
 
 
-statsOptions :: Parser Command
-statsOptions = Stats
-    <$> buildOptions
-    <*> (S.StatCfg
-          <$> option
-                  ( Just <$> auto )
-                  ( metavar "MAX-SIZE"
-                 <> value Nothing
-                 <> long "max-size"
-                 <> short 'm' )
-          <*> strOption
-                ( metavar "START-SYM"
-               <> long "start-sym"
-               <> short 's' )
-          <*> option
-            auto
-             ( metavar "PRINT-PARSED"
-               <> value 0
-               <> long "print-parsed"
-               <> short 'p' ) )
+-- statsOptions :: Parser Command
+-- statsOptions = Stats
+--     <$> buildOptions
+--     <*> (S.StatCfg
+--           <$> option
+--                   ( Just <$> auto )
+--                   ( metavar "MAX-SIZE"
+--                  <> value Nothing
+--                  <> long "max-size"
+--                  <> short 'm' )
+--           <*> strOption
+--                 ( metavar "START-SYM"
+--                <> long "start-sym"
+--                <> short 's' )
+--           <*> option
+--             auto
+--              ( metavar "PRINT-PARSED"
+--                <> value 0
+--                <> long "print-parsed"
+--                <> short 'p' ) )
 
 
 --------------------------------------------------
@@ -232,11 +224,11 @@ statsOptions = Stats
 
 opts :: Parser Command
 opts = subparser
-        ( command "build"
-            (info (helper <*> (Build <$> buildOptions))
-                (progDesc "Build automaton from the grammar")
-                )
-        <> command "grammar"
+--         ( command "build"
+--             (info (helper <*> (Build <$> buildOptions))
+--                 (progDesc "Build automaton from the grammar")
+--                 )
+         ( command "grammar"
             (info (helper <*> grammarOptions)
                 (progDesc "Parse the input grammar file")
                 )
@@ -248,22 +240,22 @@ opts = subparser
             (info (helper <*> morphOptions)
                 (progDesc "Parse and print the morphology file")
                 )
-        <> command "trees"
-            (info (helper <*> (Trees <$> buildOptions))
-                (progDesc "Show elementary trees, no FSs")
-                )
-        <> command "stats"
-            (info (helper <*> statsOptions)
-                (progDesc "Parse sentences from stdin")
-                )
-        <> command "print"
-            (info (helper <*> (Print <$> buildOptions))
-                (progDesc "Parse and print the lexicon")
-                )
-        <> command "rules"
-            (info (helper <*> (Rules <$> buildOptions))
-                (progDesc "Print standard rules; experimental mode")
-                )
+--         <> command "trees"
+--             (info (helper <*> (Trees <$> buildOptions))
+--                 (progDesc "Show elementary trees, no FSs")
+--                 )
+--         <> command "stats"
+--             (info (helper <*> statsOptions)
+--                 (progDesc "Parse sentences from stdin")
+--                 )
+--         <> command "print"
+--             (info (helper <*> (Print <$> buildOptions))
+--                 (progDesc "Parse and print the lexicon")
+--                 )
+--         <> command "rules"
+--             (info (helper <*> (Rules <$> buildOptions))
+--                 (progDesc "Print standard rules; experimental mode")
+--                 )
         <> command "parse"
             (info (helper <*> parseOptions)
                 (progDesc "Parse stdin")
@@ -274,12 +266,12 @@ opts = subparser
 -- | Run program depending on the cmdline arguments.
 run :: Command -> IO ()
 run cmd = case cmd of
-         Build buildData ->
-            B.printAuto buildData
-         Trees buildData ->
-            B.printTrees buildData
-         Grammar grammarPath rmPhon ->
-            G.printGrammar rmPhon grammarPath
+--          Build buildData ->
+--             B.printAuto buildData
+--          Trees buildData ->
+--             B.printTrees buildData
+         Grammar grammarPath ->
+            G.printGrammar grammarPath
          Lexicon lexPath useLex ->
            if useLex
            then Lex.printLexiconLex lexPath
@@ -288,12 +280,12 @@ run cmd = case cmd of
            if useMph
            then Morph.printMorphMph path
            else Morph.printMorph path
-         Print buildData ->
-            B.printTrees buildData
-         Stats buildData cfg ->
-            S.statsOn cfg buildData
-         Rules buildData ->
-            B.printRules buildData
+--          Print buildData ->
+--             B.printTrees buildData
+--          Stats buildData cfg ->
+--             S.statsOn cfg buildData
+--          Rules buildData ->
+--             B.printRules buildData
          Parse gramCfg parseCfg ->
             P.parseAll parseCfg gramCfg
 

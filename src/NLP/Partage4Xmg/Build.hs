@@ -25,7 +25,7 @@ module NLP.Partage4Xmg.Build
 ) where
 
 
-import qualified Control.Monad.State.Strict as E
+import qualified Control.Monad.State.Strict ts E
 
 import           Data.Maybe (fromJust)
 import qualified Data.Text as T
@@ -230,7 +230,7 @@ getAncTrees
     :: FilePath         -- ^ Grammar
     -> IO (S.Set Tree)
 getAncTrees path = do
-    ts <- P.readGrammar False path
+    ts <- P.readGrammar path
     flip E.execStateT S.empty $ E.forM_ ts $ \(_family, tree) -> do
         let tree' = convert tree
         -- Rather nasty trick, but works.  Otherwise the tree is
@@ -243,7 +243,7 @@ getAncTrees path = do
 -- | Get the set of TAG trees.
 getTreeMap :: FilePath -> IO (M.Map P.Family (S.Set Tree))
 getTreeMap path = do
-    ts <- P.readGrammar False path
+    ts <- P.readGrammar path
     flip E.execStateT M.empty $ E.forM_ ts $ \(family, tree) -> do
         let tree' = convert tree
         -- Rather nasty trick, but works.  Otherwise the tree is

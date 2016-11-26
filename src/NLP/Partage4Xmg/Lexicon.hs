@@ -29,7 +29,7 @@ import           Control.Monad ((<=<))
 import           Data.Maybe          (mapMaybe)
 import           Data.List           (groupBy)
 import qualified Data.Foldable       as F
--- import qualified Data.Text           as T
+import qualified Data.Text           as T
 import qualified Data.Text.Lazy      as L
 import qualified Data.Text.Lazy.IO   as L
 import qualified Data.Tree           as R
@@ -61,9 +61,9 @@ type Q a = PolySoup.Q (XmlTree L.Text) a
 
 -- | Word.
 data Word = Word
-    { lemma :: L.Text
+    { lemma :: T.Text
       -- ^ Lemma -- the base form of the word
-    , cat :: L.Text
+    , cat :: T.Text
       -- ^ Category of the word (e.g. "subst")
     } deriving (Show, Eq, Ord)
 
@@ -102,8 +102,8 @@ lexiconQ = true //> lemmaQ
 lemmaQ :: Q Entry
 lemmaQ = (named "lemma" *> nameCat) `join` \(nam, cat') -> do
   let word = Word
-        { lemma = nam
-        , cat = cat' }
+        { lemma = L.toStrict nam
+        , cat = L.toStrict cat' }
   famSet <- S.fromList <$>
     every' (node famNameQ)
   return (word, famSet)
@@ -113,12 +113,12 @@ lemmaQ = (named "lemma" *> nameCat) `join` \(nam, cat') -> do
 
 
 -- | Extract the family name from ID.
-getFamName :: L.Text -> L.Text
+getFamName :: L.Text -> Family
 getFamName x = case L.stripPrefix "family[@name=" x of
     Nothing -> error "getFamName: wrong prefix"
     Just y  -> case L.stripSuffix "]" y of
         Nothing -> error "getFamName: wrong suffix"
-        Just z  -> z
+        Just z  -> L.toStrict z
 
 
 -- | Parse textual contents of the French TAG XML file.
@@ -183,10 +183,10 @@ parseEntry
       let word = Word
             { lemma = look "ENTRY" m
             , cat = look "CAT" m }
-          famSet = S.fromList . L.words $ look "FAM" m
+          famSet = S.fromList . T.words $ look "FAM" m
       in  (word, famSet)
     look x m = case M.lookup x m of
-      Nothing -> error $ "parseEntry: " ++ L.unpack x ++ " not found"
+      Nothing -> error $ "parseEntry: " ++ T.unpack x ++ " not found"
       Just y  -> y
     useless line = case L.uncons line of
       Just (x, _) -> x == '%'
@@ -194,7 +194,7 @@ parseEntry
 
 
 -- | Parse the individual lines of an entry and return a map of its sections.
-parseSections :: [L.Text] -> M.Map L.Text L.Text
+parseSections :: [L.Text] -> M.Map T.Text T.Text
 parseSections
   = M.fromList
   . map parseGroup
@@ -202,4 +202,5 @@ parseSections
   where
     parseGroup (x : xs) =
       let (name, val1) = L.breakOn ":" (L.drop 1 x)
-       in (name, L.strip . L.unlines $ L.drop 1 val1 : xs)
+       in ( L.toStrict name
+          , L.toStrict . L.strip . L.unlines $ L.drop 1 val1 : xs)

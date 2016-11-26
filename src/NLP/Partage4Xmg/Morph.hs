@@ -31,6 +31,7 @@ import           Data.List           (groupBy)
 import qualified Data.Set            as S
 import qualified Data.Map.Strict     as M
 -- import qualified Data.Char           as C
+import qualified Data.Text           as T
 import qualified Data.Text.Lazy      as L
 import qualified Data.Text.Lazy.IO   as L
 import qualified Data.Foldable       as F
@@ -57,7 +58,7 @@ type TagQ a = PolySoup.Q (TagSoup.Tag L.Text) a
 
 -- | Morphology entry.
 data Morph = Morph
-    { wordform :: L.Text
+    { wordform :: T.Text
       -- ^ Surface form of a word
     , analyzes :: S.Set Ana
       -- ^ Possible analyzes of the `wordform`
@@ -74,7 +75,7 @@ data Ana = Ana
 
 
 -- | Get the lemma of the analysis.
-lemma :: Ana -> L.Text
+lemma :: Ana -> T.Text
 lemma = Lex.lemma . word
 
 
@@ -96,7 +97,7 @@ allQ = true //> morphQ
 -- | Entry parser.
 morphQ :: Q Morph
 morphQ = (named "morph" *> attr "lex") `join` \form -> do
-  Morph form . S.fromList <$>
+  Morph (L.toStrict form) . S.fromList <$>
     every' lemmaRefQ
 
 
@@ -105,8 +106,8 @@ lemmaRefQ = do
   (named "lemmaref" *> nameCatQ) `join` \(name', cat') -> do
     avm' <- first avmQ
     let word' = Lex.Word
-          { Lex.lemma = name'
-          , Lex.cat = cat' }
+          { Lex.lemma = L.toStrict name'
+          , Lex.cat = L.toStrict cat' }
     return $ Ana
       { word = word'
       , avm = avm' }
@@ -184,23 +185,19 @@ parseMph line =
   where
     check Nothing  = trace (show line) $ error "parseMph: no parse"
     check (Just x) = x
-    justLeft (Just (Left x)) = x
-    justLeft _ = error "parseMph.justLeft: impossible happened"
-    pick s = case S.toList s of
-      [x] -> x
-      _ -> error "parseMph.pick: impossible happened 2"
     mphA = do
       form <- wordA <* many_ A.space
       base <- wordA <* many_ A.space
+      pos  <- wordA <* many_ A.space
       avmTxt <- L.strip <$> A.takeLazyText
       let ana = Ana
             { word = Lex.Word
-              { Lex.lemma = base
-              , Lex.cat = (pick . justLeft) (M.lookup "pos" avm0) }
+              { Lex.lemma = L.toStrict base
+              , Lex.cat = L.toStrict pos }
             , avm = avm0 }
           avm0 = parseAvm avmTxt
       return $ Morph
-        { wordform = form
+        { wordform = L.toStrict form
         , analyzes = S.singleton ana }
 
 
@@ -222,18 +219,18 @@ avmA = do
     between p q x = p *> x <* q
 
 
-attrValA :: A.Parser (L.Text, Either G.Val G.Var)
+attrValA :: A.Parser (T.Text, Either G.Val G.Var)
 attrValA = do
   x <- many_ A.space *> idenA
   many_ A.space *> A.char '='
   y <- valA
-  return (x, Left y)
+  return (L.toStrict x, Left y)
 
 
 valA :: A.Parser G.Val
 valA = do
   xs <- (many_ A.space *> idenA <* many_ A.space) `A.sepBy1'` (A.char '|')
-  return $ S.fromList xs
+  return . S.fromList . map L.toStrict $ xs
 
 
 -- | A single identifier or value.

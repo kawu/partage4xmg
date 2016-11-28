@@ -8,6 +8,7 @@ module NLP.Partage4Xmg.Ensemble
   Grammar
 , getInterps
 , getTreesFS
+, splitFSTree
 
 -- * Types
 , NonTerm
@@ -17,14 +18,16 @@ module NLP.Partage4Xmg.Ensemble
 -- ** FS-related
 , Key
 , Val
-, ClosedFS
+, OFS
+, CFS
+, FSTree
 
 -- * Reading
 , GramCfg(..)
 , readGrammar
 
--- * Utils
-, closeAVM
+-- -- * Utils
+-- , closeAVM
 ) where
 
 
@@ -47,7 +50,8 @@ import qualified NLP.Partage.Tree.Other     as O
 import qualified NLP.Partage.Tree.Comp      as C
 import qualified NLP.Partage.Env            as Env
 import qualified NLP.Partage.FS             as FS
-import qualified NLP.Partage.FSTree         as FSTree
+-- import qualified NLP.Partage.FSTree         as FSTree
+import qualified NLP.Partage.FSTree2         as FSTree
 
 import qualified NLP.Partage4Xmg.Lexicon    as Lex
 import qualified NLP.Partage4Xmg.Morph      as Morph
@@ -59,19 +63,20 @@ import qualified NLP.Partage4Xmg.Grammar    as G
 --------------------------------------------------
 
 
--- | Either a regular terminal or an anchor.
-data ATerm
-    = Term T.Text
-    | Anchor T.Text
-    deriving (Show, Read, Eq, Ord)
-
-
 -- | A non-terminal.
 type NonTerm = T.Text
 
 
 -- | A regular terminal.
 type Term = T.Text
+
+
+-- | Either a regular terminal or an anchor.
+data ATerm
+    = Term Term
+    | Anchor NonTerm
+    deriving (Show, Read, Eq, Ord)
+
 
 
 -- | Type of the node in TAG trees.
@@ -99,8 +104,12 @@ type Val = T.Text
 type FSTree t = FSTree.FSTree NonTerm t Key Val
 
 
+-- | An open FS.
+type OFS = FS.FS (FSTree.Loc Key) Val
+
+
 -- | A closed FS.
-type ClosedFS = FS.ClosedFS Key Val
+type CFS = FS.ClosedFS (FSTree.Loc Key) Val
 
 
 --------------------------------------------------
@@ -133,33 +142,33 @@ _getTrees Grammar{..} ana = S.unions
   ]
 
 
--- -- | Retrieve the set of grammar trees related to te given interpretation.
--- getTrees :: Grammar -> Morph.Ana -> [Tree Term]
--- getTrees gram ana
---   = map simplify
---   . map (anchor . L.toStrict $ Morph.lemma ana)
---   . map convert
---   . S.toList
---   $ _getTrees gram ana
-
-
--- | Retrieve the set of FS-aware grammar trees related to te given interpretation.
-getTreesFS :: Grammar -> Morph.Ana -> [(Tree Term, C.Comp ClosedFS)]
-getTreesFS gram ana
-  = mapMaybe process
+-- | Retrieve the FS-aware grammar ETs related to te given interpretation.
+getTreesFS
+  :: Grammar
+  -> Term
+     -- ^ A wordform
+  -> Morph.Ana
+     -- ^ The analysis corresponding the wordform
+  -- -> [(Tree Term, C.Comp CFS)]
+  -> [Env.EnvM Val (FSTree Term)]
+getTreesFS gram term ana
+  -- = mapMaybe process
+  = map process
   . S.toList
   $ _getTrees gram ana
   where
-    process tree = splitFSTree . fmap simplifyFS $ do
-      let term = Morph.lemma ana
+    -- process tree = splitFSTree . fmap simplifyFS $ do
+    process tree = fmap simplifyFS $ do
+      -- let term = Morph.lemma ana
       converted <- withVarMap (convertFS tree)
-      let fs = closeAVM (Morph.avm ana)
+      -- below, we make it bottom only because in the corresponding
+      -- anchor nodes features are assigned to bottom FS only too.
+      let fs = closeAVM . G.botOnly $ Morph.avm ana
       anchorFS term fs converted
 
 
--- | Close the given XMG AVM.  Makes sense only if we know that
--- variables of this AVM are not shared with other AVMs.
-closeAVM :: G.AVM -> FS.ClosedFS Key Val
+-- | Convert and close the given XMG AVM.
+closeAVM :: G.AVM2 -> CFS
 closeAVM avm = maybe [] id . fst . Env.runEnvM $ do
   fs <- withVarMap (convertAVM avm)
   FS.close fs
@@ -268,29 +277,49 @@ convertFS (R.Node G.NonTerm{..} xs) =
   case typ of
     G.Std -> below $ O.NonTerm sym
     G.Foot -> leaf $ O.Foot sym
-    G.Anchor -> do
-      fs <- convertAVM avm
-      theLeaf <- leaf . O.Term $ Anchor sym
-      return $ R.Node (O.NonTerm sym, fs) [theLeaf]
+    G.Anchor -> leaf . O.Term $ Anchor sym
+--       -- fs <- mkFS
+--       fs <- convertAVM avm
+--       theLeaf <- leaf . O.Term $ Anchor sym
+--       return $ R.Node (O.NonTerm sym, fs) [theLeaf]
     G.Lex -> leaf . O.Term $ Term sym
     G.Other _ -> below $ O.NonTerm sym
   where
-    -- TODO: provisional solutino, top and bot should be distinguished
-    avm = maybe M.empty id (top <|> bot)
+--     -- TODO: provisional solutino, top and bot should be distinguished
+--     avm = maybe M.empty id (top <|> bot)
     below x = do
+      -- fs <- mkFS
       fs <- convertAVM avm
       R.Node (x, fs) <$> mapM convertFS xs
     leaf x = do
+      -- fs <- mkFS
       fs <- convertAVM avm
       return $ R.Node (x, fs) []
+--     mkFS = do
+--       let topList = maybe [] (M.toList top)
+--           botList = maybe [] (M.toList bot)
+-- --       topFS <- convertAVM $ map (first FSTree.Top) topList
+-- --       botFS <- convertAVM $ map (first FSTree.Bot) botList
+--       convertAVM $
+--         map (first FSTree.Top) topList ++
+--         map (first FSTree.Bot) botList
+-- --       -- FS.unify topFS botFS -- not really unification
 
 
 -- | Convert an XMG-style AVM to a FS.
-convertAVM :: G.AVM -> E.StateT VarMap (Env.EnvM Val) (FS.FS Key Val)
+convertAVM :: G.AVM2 -> E.StateT VarMap (Env.EnvM Val) OFS
+-- convertAVM
+--   :: [(k, (Either G.Val G.Var))]
+--   -> E.StateT VarMap (Env.EnvM Val) (FS.FS k Val)
 convertAVM avm = fmap M.fromList . runListT $ do
-  (key, valVar) <- each (M.toList avm)
+  let topList = maybe [] M.toList (G.top avm)
+      botList = maybe [] M.toList (G.bot avm)
+      xs = map (first FSTree.Top) topList ++
+           map (first FSTree.Bot) botList
+  (key, valVar) <- each xs
   case valVar of
-    Left val -> return (key, FS.Val . S.fromList $ S.toList val)
+    -- Left val -> return (key, FS.Val . S.fromList $ S.toList val)
+    Left val -> return (key, FS.Val val)
     Right var0 -> do
       var <- P.lift $ varFor var0
       return (key, FS.Var var)
@@ -312,7 +341,7 @@ varFor gramVar = do
 -- | Anchor the given tree with the given terminal and its accompanying FS.
 anchorFS
   :: Term                -- ^ Terminal used to replace the anchor
-  -> FS.ClosedFS Key Val -- ^ The accompanying FS
+  -> CFS                 -- ^ The accompanying FS
   -> FSTree ATerm        -- ^ `FSTree` with an anchor
   -> Env.EnvM Val (FSTree ATerm)
 anchorFS anc newFS (R.Node label@(typ, oldFS) xs) = case typ of
@@ -320,24 +349,23 @@ anchorFS anc newFS (R.Node label@(typ, oldFS) xs) = case typ of
   O.Foot _ -> return $ R.Node label []
   O.Term t -> case t of
     Term _ -> return $ R.Node label []
-    Anchor _ -> do
+    Anchor sym -> do
       newFS' <- FS.reopen newFS
       fs <- FS.unifyFS oldFS newFS'
-      env <- E.get
+--       env <- E.get
 --       trace (show newFS) $ trace (show oldFS) $
 --         trace (show newFS') $ trace (show fs) $ trace (show env) $
-      return $ R.Node (O.Term (Term anc), fs) []
+      let leaf = R.Node (O.Term (Term anc), M.empty) []
+      return $ R.Node (O.NonTerm sym, fs) [leaf]
 
 
 -- | Extract the tree embedded in the environment and the accompanying computation.
 splitFSTree
   :: Env.EnvM Val (FSTree Term)
-  -> Maybe
-     ( FSTree.Tree NonTerm Term
-     , C.Comp (FS.ClosedFS Key Val) )
+  -> Maybe (Tree Term, C.Comp CFS)
 splitFSTree source = do
   let comp = FSTree.compile source
-  tree <- FSTree.extract source
+  tree <- fmap fst <$> FSTree.extract source
   return (tree, comp)
 
 

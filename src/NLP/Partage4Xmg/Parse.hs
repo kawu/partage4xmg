@@ -8,6 +8,7 @@
 
 module NLP.Partage4Xmg.Parse
 ( ParseCfg (..)
+, printETs
 , parseAll
 ) where
 
@@ -16,7 +17,7 @@ import           Control.Monad              (forM_, unless, when)
 import           Control.Monad.Trans.Maybe
 
 import           Data.List                  (intercalate)
-import           Data.Maybe                 (maybeToList)
+import           Data.Maybe                 (maybeToList, mapMaybe)
 import qualified Data.Map.Strict            as M
 import qualified Data.MemoCombinators       as Memo
 import qualified Data.Set                   as S
@@ -32,6 +33,8 @@ import qualified NLP.Partage.DAG            as DAG
 import qualified NLP.Partage.Earley         as Earley
 import qualified NLP.Partage.Tree           as Parsed
 import qualified NLP.Partage.FS             as FS
+import qualified NLP.Partage.FSTree2        as FSTree
+import qualified NLP.Partage.Env            as Env
 import qualified NLP.Partage.Auto.Trie      as Trie
 import qualified NLP.Partage.Tree.Comp      as C
 import qualified NLP.Partage.Tree.Other     as O
@@ -41,6 +44,8 @@ import qualified NLP.Partage4Xmg.Lexicon    as Lex
 import qualified NLP.Partage4Xmg.Morph      as Morph
 import qualified NLP.Partage4Xmg.Grammar    as Gram
 import qualified NLP.Partage4Xmg.Ensemble   as Ens
+import           NLP.Partage4Xmg.Ensemble
+                 (Tree, FSTree, NonTerm, Term, Val, CFS)
 
 
 --------------------------------------------------
@@ -50,12 +55,10 @@ import qualified NLP.Partage4Xmg.Ensemble   as Ens
 
 -- | Parsing configuration.
 data ParseCfg = ParseCfg
-    { maxSize     :: Maybe Int
-      -- ^ Optional limit on the sentence size
-    , startSym    :: String
-      -- ^ The starting symbol of trees
+    { startSym    :: String
+      -- ^ The starting symbol
     , printParsed :: Int
-      -- ^ Print the set of parsed trees?
+      -- ^ Print the set of parsed trees?  How many?
     , useFS       :: Bool
       -- ^ Use feature structures?
     , printDeriv  :: Bool
@@ -63,22 +66,14 @@ data ParseCfg = ParseCfg
     } deriving (Show, Read, Eq, Ord)
 
 
--- | If the list longer than the given length?
-longerThan :: [a] -> Maybe Int -> Bool
-longerThan _ Nothing   = False
-longerThan xs (Just n) = length xs > n
-
-
 --------------------------------------------------
 -- Parsing
 --------------------------------------------------
 
 
--- | Create an automaton from a list of lexicalized elementary trees and the corresponding
--- feature structures.
-mkAutoFS
-  :: [(Ens.Tree T.Text, C.Comp a)]
-  -> Earley.Auto T.Text T.Text a
+-- | Create an automaton from a list of lexicalized elementary trees and the
+-- corresponding feature structures.
+mkAutoFS :: [(Tree Term, C.Comp a)] -> Earley.Auto NonTerm Term a
 mkAutoFS gram =
   let dag = DAG.mkGram gram
       tri = Trie.fromGram (DAG.factGram dag)
@@ -86,10 +81,42 @@ mkAutoFS gram =
 
 
 -- | Create an automaton from a list of lexicalized elementary trees.
-mkAuto :: [Ens.Tree T.Text] -> Earley.Auto T.Text T.Text Ens.ClosedFS
+mkAuto :: [Tree Term] -> Earley.Auto NonTerm Term CFS
 mkAuto =
   let dummy = C.Comp (const $ Just []) C.dummyTopDown
   in  mkAutoFS . map (,dummy)
+
+
+-- | Retieve the set of ETs for the given grammar and the given terminal.
+gramOn
+  :: Ens.Grammar
+  -- ^ The TAG grammar
+  -> Term
+  -- ^ The terminal
+  -- -> M.Map (Tree Term) (C.Comp CFS)
+  -> [Env.EnvM Val (FSTree Term)]
+gramOn gram word =
+  elemTrees
+  where
+    interpSet = Ens.getInterps gram word
+    elemTrees = concat
+      [ Ens.getTreesFS gram word interp
+      | interp <- S.toList interpSet ]
+
+
+-- | Compile the given tree into a grammar tree and the corresponding
+-- computation.
+compile
+  :: Env.EnvM Val (FSTree Term)
+  -> Maybe (Tree Term, C.Comp CFS)
+compile = Ens.splitFSTree
+
+
+-- | Extract the underlying FSTree.
+extract
+  :: Env.EnvM Val (FSTree Term)
+  -> Maybe (FSTree Term)
+extract = FSTree.extract
 
 
 -- | Parse the given sentence from the given start symbol with the given grammar.
@@ -98,28 +125,15 @@ parseWith
   -- ^ The TAG grammar
   -> [T.Text]
   -- ^ The sentence to parse
-  -> IO (Earley.Hype T.Text T.Text Ens.ClosedFS)
-parseWith gram sent0 = do
-  let interps = map (Ens.getInterps gram) sent0
-      elemTrees = concat
-        [ map fst $ Ens.getTreesFS gram interp
-        | interpSet <- interps
-        , interp <- S.toList interpSet ]
+  -> IO (Earley.Hype NonTerm Term CFS)
+parseWith gram sent = do
+  let elemTrees
+        = map fst . M.toList . M.fromList
+        . mapMaybe compile
+        . concatMap (gramOn gram)
+        $ sent
       auto = mkAuto elemTrees
-      input =
-        [ S.fromList
-          . map (\interp -> (Morph.lemma interp, []))
-          . S.toList
-          $ interpSet
-        | interpSet <- interps ]
-
---   -- logging
---   forM_ (S.toList elemTrees) $
---     putStrLn . R.drawTree . fmap show
---   putStrLn ""
---   forM_ input print
-
-  -- parsing
+      input = map (S.singleton . (,[] :: CFS)) sent
   Earley.earleyAuto auto . Earley.fromSets $ input
 
 
@@ -129,55 +143,47 @@ parseWithFS
   -- ^ The TAG grammar
   -> [T.Text]
   -- ^ The sentence to parse
-  -> IO (Earley.Hype T.Text T.Text Ens.ClosedFS)
-parseWithFS gram sent0 = do
-  let interps = map (Ens.getInterps gram) sent0
-      elemTrees = concat
-        [ Ens.getTreesFS gram interp
-        | interpSet <- interps
-        , interp <- S.toList interpSet ]
-      auto = mkAutoFS elemTrees
-      input =
-        [ S.fromList
-          . map (\interp ->
-                   ( Morph.lemma interp
-                   , Ens.closeAVM $ Morph.avm interp )
-                )
-          . S.toList
-          $ interpSet
-        | interpSet <- interps ]
-  -- Earley.parseAuto auto begSym . Earley.fromSets $ input
-  Earley.earleyAuto auto . Earley.fromSets $ input
-
-
--- -- -- | Like `parseWith` but with FS unification.
--- -- parseWithFS'
--- --   :: Ens.Grammar
--- --   -- ^ The TAG grammar
--- --   -> T.Text
--- --   -- ^ Start symbol
--- --   -> [T.Text]
--- --   -- ^ The sentence to parse
--- --   -> IO [Deriv.TokDeriv T.Text T.Text (FS.ClosedFS T.Text T.Text)]
--- parseWithFS' gram begSym sent0 = do
---   let interps = map (Ens.getInterps gram . L.fromStrict) sent0
---       elemTrees = concat
---         [ Ens.getTreesFS gram interp
---         | interpSet <- interps
---         , interp <- S.toList interpSet ]
---       auto = mkAutoFS elemTrees
+  -> IO (Earley.Hype T.Text T.Text Ens.CFS)
+parseWithFS gram sent = do
+  let elemTrees
+        = M.fromList
+        . mapMaybe compile
+        . concatMap (gramOn gram)
+        $ sent
+      auto = mkAutoFS (M.toList elemTrees)
+      input = [S.singleton (x, []) | x <- sent]
 --       input =
 --         [ S.fromList
 --           . map (\interp ->
---                    ( L.toStrict $ Morph.lemma interp
---                    , Ens.closeAVM $ Morph.avm interp )
+--                    ( Morph.lemma interp
+--                    , Ens.closeTopAVM $ Morph.avm interp )
 --                 )
 --           . S.toList
 --           $ interpSet
 --         | interpSet <- interps ]
---   Earley.earleyAuto auto . Earley.fromSets $ input
---   -- return $ Deriv.derivTrees hype begSym (length input)
+  Earley.earleyAuto auto . Earley.fromSets $ input
 
+
+--------------------------------------------------
+-- Showing trees
+--------------------------------------------------
+
+
+-- | Read the grammar from the input file, sentences to parse from std input,
+-- and show the extracted grammar trees (no FSs, though).
+printETs :: Ens.GramCfg -> IO ()
+printETs gramCfg = do
+  gram <- Ens.readGrammar gramCfg
+  lines <- map L.toStrict . L.lines <$> L.getContents
+  forM_ lines $ \line -> do
+    let input  = T.words line
+    forM_ input $ \word -> do
+      putStrLn $ "<<WORD: " ++ T.unpack word ++ ">>"
+      putStrLn ""
+      let elemTrees = mapMaybe extract $ gramOn gram word
+      forM_ elemTrees $
+        putStrLn . R.drawTree . fmap show
+      -- putStrLn ""
 
 
 --------------------------------------------------
@@ -202,7 +208,7 @@ parseAll ParseCfg{..} gramCfg = do
     if printDeriv then do
       let parseSet = Deriv.derivTrees hype begSym (length input)
       forM_ (take printParsed $ parseSet) $ \t0 -> do
-        let t = fmap (fmap showClosedFS) t0
+        let t = fmap (fmap showCFS) t0
         putStrLn . R.drawTree . fmap show . Deriv.deriv4show $ t
     else do
       let parseSet = Earley.parsedTrees hype begSym (length input)
@@ -210,29 +216,13 @@ parseAll ParseCfg{..} gramCfg = do
         putStrLn . R.drawTree . fmap show . O.encode . Left $ t
 
 
--- -- | Read the grammar from the input file, sentences to parse from
--- -- std input, and perform the experiment.
--- parseAll'
---   :: ParseCfg
---   -> Ens.GramCfg
---   -> IO ()
--- parseAll' ParseCfg{..} gramCfg = do
---   gram <- Ens.readGrammar gramCfg
---   lines <- map L.toStrict . L.lines <$> L.getContents
---   let parseIt = parseWithFS'
---   forM_ lines $ \line -> do
---     parseSet <- parseIt gram (T.pack startSym) (T.words line)
---     forM_ (take printParsed $ parseSet) $ \t -> do
---       putStrLn . R.drawTree . fmap show . O.encode . Left $ t
-
-
 --------------------------------------------------
 -- Utils
 --------------------------------------------------
 
 
-showClosedFS :: Ens.ClosedFS -> String
-showClosedFS
+showCFS :: Ens.CFS -> String
+showCFS
   = between "{" "}"
   . intercalate ","
   . map showPair
@@ -241,6 +231,10 @@ showClosedFS
       case mayValAlt of
         Nothing  -> "_"
         Just alt -> showVals alt
-    showKeys = intercalate "&" . map T.unpack . S.toList
+    -- showKeys = intercalate "&" . map T.unpack . S.toList
+    showKeys = intercalate "&" . map showKey . S.toList
     showVals = intercalate "|" . map T.unpack . S.toList
+    showKey key = case key of
+      FSTree.Top x -> "t." ++ T.unpack x
+      FSTree.Bot x -> "b." ++ T.unpack x
     between x y z = x ++ z ++ y

@@ -44,6 +44,8 @@ data Command
 --     -- ^ Experimental mode
     | Parse E.GramCfg P.ParseCfg
     -- ^ Experimental mode
+    | Trees E.GramCfg
+    -- ^ Show extracted ETs
 
 
 -- parseCompression :: Monad m => String -> m B.Compress
@@ -109,13 +111,13 @@ gramCfgOptions = E.GramCfg
 
 parseCfgOptions :: Parser P.ParseCfg
 parseCfgOptions = P.ParseCfg
-  <$> option
-          ( Just <$> auto )
-          ( metavar "MAX-SIZE"
-         <> value Nothing
-         <> long "max-size"
-         <> short 'm' )
-  <*> strOption
+--   <$> option
+--           ( Just <$> auto )
+--           ( metavar "MAX-SIZE"
+--          <> value Nothing
+--          <> long "max-size"
+--          <> short 'm' )
+  <$> strOption
         ( metavar "START-SYM"
        <> long "start-sym"
        <> short 's' )
@@ -138,6 +140,15 @@ parseCfgOptions = P.ParseCfg
 
 parseOptions :: Parser Command
 parseOptions = Parse <$> gramCfgOptions <*> parseCfgOptions
+
+
+--------------------------------------------------
+-- Trees options
+--------------------------------------------------
+
+
+treesOptions :: Parser Command
+treesOptions = Trees <$> gramCfgOptions
 
 
 --------------------------------------------------
@@ -260,6 +271,10 @@ opts = subparser
             (info (helper <*> parseOptions)
                 (progDesc "Parse stdin")
                 )
+        <> command "trees"
+            (info (helper <*> treesOptions)
+                (progDesc "Show trees selected for sentences in stdin")
+                )
         )
 
 
@@ -288,6 +303,8 @@ run cmd = case cmd of
 --             B.printRules buildData
          Parse gramCfg parseCfg ->
             P.parseAll parseCfg gramCfg
+         Trees gramCfg ->
+            P.printETs gramCfg
 
 
 main :: IO ()

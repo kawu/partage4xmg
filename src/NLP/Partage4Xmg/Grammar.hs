@@ -14,6 +14,9 @@ module NLP.Partage4Xmg.Grammar
 , Type (..)
 , SubType
 , AVM
+, AVM2 (..)
+, topOnly
+, botOnly
 , Sym
 , Attr
 , Val
@@ -112,12 +115,31 @@ type SubType = T.Text
 data NonTerm = NonTerm
     { typ   :: Type
     , sym   :: Sym
+    , avm   :: AVM2 }
 --     , phonEps :: Bool
 --       -- ^ Phonetically empty?
 --     , avm   :: AVM }
-    , top   :: Maybe AVM
-    , bot   :: Maybe AVM }
+--     , top   :: Maybe AVM
+--     , bot   :: Maybe AVM }
     deriving (Show, Eq, Ord)
+
+
+data AVM2 = AVM2
+  { top :: Maybe AVM
+    -- ^ The top AVM
+  , bot :: Maybe AVM
+    -- ^ The bottom AVM
+  } deriving (Show, Eq, Ord)
+
+
+-- | Create a complex AVM with the top part only.
+topOnly :: AVM -> AVM2
+topOnly avm = AVM2 {top = Just avm, bot = Nothing}
+
+
+-- | Create a complex AVM with the bottom part only.
+botOnly :: AVM -> AVM2
+botOnly avm = AVM2 {top = Nothing, bot = Just avm}
 
 
 -- | Partage4Xmg tree.
@@ -205,7 +227,9 @@ nonTermQ typ' = joinR (named "narg") $
     sym' <- first symQ
     top' <- optional $ first $ avmQ "top"
     bot' <- optional $ first $ avmQ "bot"
-    return $ NonTerm (parseTyp typ') sym' top' bot'
+    return $ NonTerm (parseTyp typ') sym' $ AVM2
+      { top = top'
+      , bot = bot' }
 
 
 -- | Syntagmatic value parser.
@@ -237,7 +261,18 @@ attrValQ = join (named "f" *> attr "name") $ \atr -> do
 
 -- | Attribute value parser.
 valQ :: Q Val
-valQ = node $ named "sym" *> (S.singleton . L.toStrict <$> attr "value")
+valQ = simpleValQ <|> altValQ
+
+
+-- | Attribute simple-value parser.
+simpleValQ :: Q Val
+simpleValQ = node $ named "sym" *> (S.singleton . L.toStrict <$> attr "value")
+
+
+-- | Attribute alt-value parser.
+altValQ :: Q Val
+altValQ = joinR (named "vAlt") $
+  S.unions <$> every' simpleValQ
 
 
 -- | Attribute variable parser.

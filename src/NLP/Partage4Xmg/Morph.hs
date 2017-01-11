@@ -21,8 +21,6 @@ module NLP.Partage4Xmg.Morph
 ) where
 
 
-import Debug.Trace (trace)
-
 import           Control.Applicative ((<|>), many, optional)
 import           Control.Monad       ((<=<))
 
@@ -32,6 +30,7 @@ import qualified Data.Set            as S
 import qualified Data.Map.Strict     as M
 -- import qualified Data.Char           as C
 import qualified Data.Text           as T
+import qualified Data.Text.Encoding  as E
 import qualified Data.Text.Lazy      as L
 import qualified Data.Text.Lazy.IO   as L
 import qualified Data.Foldable       as F
@@ -43,6 +42,9 @@ import qualified Text.XML.PolySoup   as PolySoup
 
 import qualified NLP.Partage4Xmg.Lexicon as Lex
 import qualified NLP.Partage4Xmg.Grammar as G
+
+-- import System.IO.Unsafe (unsafePerformIO)
+import Debug.Trace (trace)
 
 
 -------------------------------------------------
@@ -96,9 +98,10 @@ allQ = true //> morphQ
 
 -- | Entry parser.
 morphQ :: Q Morph
-morphQ = (named "morph" *> attr "lex") `join` \form -> do
-  Morph (L.toStrict form) . S.fromList <$>
-    every' lemmaRefQ
+morphQ = (named "morph" *> attr "lex") `join` \form ->
+  -- unsafePerformIO (L.putStrLn form) `seq` do
+    Morph (L.toStrict form) . S.fromList <$>
+      every' lemmaRefQ
 
 
 lemmaRefQ :: Q Ana
@@ -133,7 +136,15 @@ avmQ = M.fromList <$> joinR (named "fs") (every' G.attrValQ)
 
 -- | Parse textual contents of the French TAG XML file.
 parseMorph :: L.Text -> [Morph]
-parseMorph = F.concat . evalP allP . parseForest . TagSoup.parseTags
+parseMorph text =
+  F.concat . evalP allP . parseForest . TagSoup.parseTags $ text
+--   where
+--     showTags = unsafePerformIO $ do
+--       let xs = TagSoup.parseTags text
+--       F.forM_ xs $ \tag -> do
+--         print tag
+--     showText = unsafePerformIO $ do
+--       L.putStrLn text
 
 
 -- | Parse the stand-alone French TAG xml file.

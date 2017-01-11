@@ -31,8 +31,6 @@ module NLP.Partage4Xmg.Ensemble
 ) where
 
 
--- import Debug.Trace (trace)
-
 import           Control.Applicative        ((<|>))
 import           Control.Arrow              (first, second)
 import qualified Control.Monad.State.Strict as E
@@ -41,6 +39,7 @@ import           Data.Maybe                 (maybeToList, mapMaybe)
 import qualified Data.Map.Strict            as M
 import qualified Data.Set                   as S
 import qualified Data.Text                  as T
+import qualified Data.Text.IO               as T
 import qualified Data.Text.Lazy             as L
 import qualified Data.Tree                  as R
 import qualified Pipes                      as P
@@ -56,6 +55,9 @@ import qualified NLP.Partage.FSTree2         as FSTree
 import qualified NLP.Partage4Xmg.Lexicon    as Lex
 import qualified NLP.Partage4Xmg.Morph      as Morph
 import qualified NLP.Partage4Xmg.Grammar    as G
+
+-- import System.IO.Unsafe (unsafePerformIO)
+-- import Debug.Trace (trace)
 
 
 --------------------------------------------------
@@ -101,15 +103,15 @@ type Val = T.Text
 
 
 -- | FS-aware tree.
-type FSTree t = FSTree.FSTree NonTerm t Key Val
+type FSTree t = FSTree.FSTree NonTerm t Key -- Val
 
 
 -- | An open FS.
-type OFS = FS.FS (FSTree.Loc Key) Val
+type OFS = FS.OFS (FSTree.Loc Key)
 
 
 -- | A closed FS.
-type CFS = FS.ClosedFS (FSTree.Loc Key) Val
+type CFS = FS.CFS (FSTree.Loc Key) Val
 
 
 --------------------------------------------------
@@ -127,9 +129,22 @@ data Grammar = Grammar
 
 -- | Map a given word to the set of its possible interpretations.
 getInterps :: Grammar -> T.Text -> S.Set Morph.Ana
-getInterps Grammar{..} orth = case M.lookup orth morphMap of
-  Nothing -> S.empty
-  Just x  -> x
+getInterps Grammar{..} orth =
+--   seq printMap $
+--   trace (show orth) $
+--   trace (T.unpack orth) $
+--   trace (show morphMap) $
+  case M.lookup orth morphMap of
+    Nothing -> S.empty
+    Just x  -> x
+--   where
+--     printMap = unsafePerformIO $ do
+--       putStrLn ""
+--       E.forM_ (M.toList morphMap) $ \(x, y) -> do
+--         print x
+--         T.putStrLn x
+--         -- print y
+--       putStrLn ""
 
 
 -- | Retrieve the set of grammar trees related to te given interpretation.
@@ -138,6 +153,7 @@ _getTrees Grammar{..} ana = S.unions
   [ treeSet
   | famSet <- maybeToList $ M.lookup (Morph.word ana) lexMap
   , family <- S.toList famSet
+  -- , treeSet <- trace (show family) $ maybeToList $ M.lookup family treeMap
   , treeSet <- maybeToList $ M.lookup family treeMap
   ]
 
@@ -169,7 +185,7 @@ getTreesFS gram term ana
 
 -- | Convert and close the given XMG AVM.
 closeAVM :: G.AVM2 -> CFS
-closeAVM avm = maybe [] id . fst . Env.runEnvM $ do
+closeAVM avm = maybe M.empty id . fst . Env.runEnvM $ do
   fs <- withVarMap (convertAVM avm)
   FS.close fs
 
@@ -319,10 +335,14 @@ convertAVM avm = fmap M.fromList . runListT $ do
   (key, valVar) <- each xs
   case valVar of
     -- Left val -> return (key, FS.Val . S.fromList $ S.toList val)
-    Left val -> return (key, FS.Val val)
+    -- Left val -> return (key, FS.Val val)
+    Left val -> P.lift . P.lift $ do
+      var <- Env.var
+      Env.set var val
+      return (key, var)
     Right var0 -> do
       var <- P.lift $ varFor var0
-      return (key, FS.Var var)
+      return (key, var)
 
 
 -- | Retrieve the corresponding environment variable. Create a new one if the

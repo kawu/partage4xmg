@@ -47,6 +47,8 @@ import qualified NLP.Partage4Xmg.Ensemble   as Ens
 import           NLP.Partage4Xmg.Ensemble
                  (Tree, FSTree, NonTerm, Term, Val, CFS)
 
+-- import Debug.Trace (trace)
+
 
 --------------------------------------------------
 -- Configuration
@@ -83,7 +85,7 @@ mkAutoFS gram =
 -- | Create an automaton from a list of lexicalized elementary trees.
 mkAuto :: [Tree Term] -> Earley.Auto NonTerm Term CFS
 mkAuto =
-  let dummy = C.Comp (const $ Just []) C.dummyTopDown
+  let dummy = C.Comp (const $ Just M.empty) C.dummyTopDown
   in  mkAutoFS . map (,dummy)
 
 
@@ -96,6 +98,7 @@ gramOn
   -- -> M.Map (Tree Term) (C.Comp CFS)
   -> [Env.EnvM Val (FSTree Term)]
 gramOn gram word =
+  -- trace (show interpSet) $ elemTrees
   elemTrees
   where
     interpSet = Ens.getInterps gram word
@@ -133,7 +136,7 @@ parseWith gram sent = do
         . concatMap (gramOn gram)
         $ sent
       auto = mkAuto elemTrees
-      input = map (S.singleton . (,[] :: CFS)) sent
+      input = map (S.singleton . (, M.empty :: CFS)) sent
   Earley.earleyAuto auto . Earley.fromSets $ input
 
 
@@ -151,7 +154,7 @@ parseWithFS gram sent = do
         . concatMap (gramOn gram)
         $ sent
       auto = mkAutoFS (M.toList elemTrees)
-      input = [S.singleton (x, []) | x <- sent]
+      input = [S.singleton (x, M.empty) | x <- sent]
 --       input =
 --         [ S.fromList
 --           . map (\interp ->
@@ -213,7 +216,8 @@ parseAll ParseCfg{..} gramCfg = do
     else do
       let parseSet = Earley.parsedTrees hype begSym (length input)
       forM_ (take printParsed $ parseSet) $ \t -> do
-        putStrLn . R.drawTree . fmap show . O.encode . Left $ t
+        -- putStrLn . R.drawTree . fmap show . O.encode . Left $ t
+        putStrLn . R.drawTree . fmap (O.showNode T.unpack T.unpack) . O.encode . Left $ t
 
 
 --------------------------------------------------
@@ -222,19 +226,19 @@ parseAll ParseCfg{..} gramCfg = do
 
 
 showCFS :: Ens.CFS -> String
-showCFS
-  = between "{" "}"
-  . intercalate ","
-  . map showPair
-  where
-    showPair (keySet, mayValAlt) = showKeys keySet ++ "=" ++
-      case mayValAlt of
-        Nothing  -> "_"
-        Just alt -> showVals alt
-    -- showKeys = intercalate "&" . map T.unpack . S.toList
-    showKeys = intercalate "&" . map showKey . S.toList
-    showVals = intercalate "|" . map T.unpack . S.toList
-    showKey key = case key of
-      FSTree.Top x -> "t." ++ T.unpack x
-      FSTree.Bot x -> "b." ++ T.unpack x
-    between x y z = x ++ z ++ y
+showCFS = show
+--   = between "{" "}"
+--   . intercalate ","
+--   . map showPair
+--   where
+--     showPair (keySet, mayValAlt) = showKeys keySet ++ "=" ++
+--       case mayValAlt of
+--         Nothing  -> "_"
+--         Just alt -> showVals alt
+--     -- showKeys = intercalate "&" . map T.unpack . S.toList
+--     showKeys = intercalate "&" . map showKey . S.toList
+--     showVals = intercalate "|" . map T.unpack . S.toList
+--     showKey key = case key of
+--       FSTree.Top x -> "t." ++ T.unpack x
+--       FSTree.Bot x -> "b." ++ T.unpack x
+--     between x y z = x ++ z ++ y

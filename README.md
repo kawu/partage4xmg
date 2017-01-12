@@ -12,9 +12,9 @@ Installation
 It is recommanded to install *partage* using the [Haskell Tool Stack][stack],
 which you will need to download and install on your machine beforehand.
 Then:
-* Create an empty directory, which will be dedicated for the ParTAGe toolset,
+* Create an empty directory, which will be dedicated for the ParTAGe source code,
 * Clone the `simple` branch of the [ParTAGe][partage] repository into this empty directory,
-* Clone the `simple` branch of *this* repository into the same directory,
+* Clone the `simple` branch of [this][this] repository into the same directory,
 * Run `stack install` in the local copy of the `partage4xmg` repository.
 
 Under linux, you can use the following sequence of commands to set up ParTAGe4XMG:
@@ -46,15 +46,17 @@ where the argument of the `-s` option specifies the axiom symbol.
 Note that in this mode the parser can take some time to read the grammar,
 especially if the input `.xml` files are big.
 If you have several sentences to parse, you can write them in a single file and
-provide it as input for the parser, which will read and process them one by one.
+provide it as input for the parser, which will then read and process them one by
+one.
 
-*Note also that at the moment the command-line tool does not implement any smart
-tokenization strategies and it assumes that you supply the input sentences with
-words separated by spaces.*
+*At the moment the command-line tool does not implement any smart tokenization
+strategies and it assumes that you supply the input sentences with words
+separated by spaces.*
 
 
 
 
+[this]: https://github.com/kawu/partage4xmg
 [partage]: https://github.com/kawu/partage#partage
 [xmg]: http://dokufarm.phil.hhu.de/xmg/
 [stack]: http://docs.haskellstack.org "Haskell Tool Stack"

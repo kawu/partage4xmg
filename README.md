@@ -45,19 +45,16 @@ given sentence using the following command:
 where the argument of the `-s` option specifies the axiom symbol.
 Note that in this mode the parser can take some time to read the grammar,
 especially if the input `.xml` files are big.
-If you have several sentences to parse, you can write them in a single
-file and provide it as input for the parse, which will read and parse them one
-by one.
+If you have several sentences to parse, you can write them in a single file and
+provide it as input for the parser, which will read and process them one by one.
 
 *Note also that at the moment the command-line tool does not implement any smart
 tokenization strategies and it assumes that you supply the input sentences with
 words separated by spaces.*
 
 
-References
-----------
 
 
-[partage]: https://github.com/kawu/partage.git
+[partage]: https://github.com/kawu/partage#partage
 [xmg]: http://dokufarm.phil.hhu.de/xmg/
 [stack]: http://docs.haskellstack.org "Haskell Tool Stack"

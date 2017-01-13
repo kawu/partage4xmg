@@ -259,11 +259,14 @@ showGenCFS showKey
   . map showPair
   . M.toList
   where
-    showPair (key, FS.Val{..}) = showKey key ++ "=" ++
-      case valAlt of
-        -- Nothing  -> "_"
-        Nothing  -> "@" ++ show valID
-        Just alt -> showVals alt
+    showPair (key, FS.Val{..}) =
+      -- "(" ++ show valID ++ ")" ++ showKey key ++
+      showKey key ++ "=" ++
+      -- showKey key ++ "@" ++ show valID ++
+      (case valAlt of
+        Nothing  -> ""
+        Just alt -> showVals alt)
+      ++ "(" ++ show valID ++ ")"
     -- showKeys = intercalate "&" . map T.unpack . S.toList
     showVals = intercalate "|" . map T.unpack . S.toList
 --     showKey key = case key of
@@ -271,7 +274,7 @@ showGenCFS showKey
 --       FSTree.Bot x -> "b." ++ T.unpack x
     between x y z = x ++ z ++ y
 
--- showCFS = 
+-- showCFS =
 --   = between "{" "}"
 --   . intercalate ","
 --   . map showPair

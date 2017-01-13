@@ -1,17 +1,20 @@
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE NoMonomorphismRestriction #-}
 
 
 -- import           Data.Monoid (mempty)
 import           Options.Applicative
 import qualified Data.Char as C
 
+-- import qualified NLP.Partage.FSTree2        as FSTree2
 
 -- import qualified NLP.Partage4Xmg.Automat as A
 -- import qualified NLP.Partage4Xmg.Build as B
 import qualified NLP.Partage4Xmg.Grammar as G
 import qualified NLP.Partage4Xmg.Lexicon as Lex
 import qualified NLP.Partage4Xmg.Morph as Morph
-import qualified NLP.Partage4Xmg.Ensemble as E
+-- import qualified NLP.Partage4Xmg.Ensemble as E
+import qualified NLP.Partage4Xmg.Ensemble.Common as E
 import qualified NLP.Partage4Xmg.Parse as P
 -- import qualified NLP.Partage4Xmg.Gen as G
 -- import qualified NLP.Partage4Xmg.GenLex as GL
@@ -28,7 +31,7 @@ data Command
 --     = Build B.BuildData
 --     -- ^ Build an automaton
     -- | Parse -- ParseOptions
-    = Grammar FilePath
+    = Grammar Bool FilePath
     -- ^ Parse and show the input grammar
     | Lexicon FilePath Bool
     -- ^ Parse and print lexicon
@@ -42,9 +45,11 @@ data Command
 --     -- ^ Print trees (lexicon allowed, FSs removed)
 --     | Rules B.BuildData
 --     -- ^ Experimental mode
-    | Parse E.GramCfg P.ParseCfg
+    | Parse E.GramCfg Bool P.ParseCfg
+--     | Parse (E.GramCfg G.AVM2 (FSTree2.Loc E.Key)) P.ParseCfg
     -- ^ Experimental mode
-    | Trees E.GramCfg
+    | Trees E.GramCfg Bool
+--     | Trees (E.GramCfg G.AVM2 (FSTree2.Loc E.Key))
     -- ^ Show extracted ETs
 
 
@@ -82,6 +87,7 @@ data Command
 --------------------------------------------------
 
 
+-- gramCfgOptions :: Parser (E.GramCfg G.AVM2 (FSTree2.Loc E.Key))
 gramCfgOptions :: Parser E.GramCfg
 gramCfgOptions = E.GramCfg
   <$> strOption
@@ -107,6 +113,13 @@ gramCfgOptions = E.GramCfg
        <> short 'g'
        <> metavar "FILE"
        <> help "Grammar .xml file" )
+
+
+topBotOption :: Parser Bool
+topBotOption = switch
+  ( long "topbot"
+    <> short 't'
+    <> help "Use top/bottom FS distinction" )
 
 
 parseCfgOptions :: Parser P.ParseCfg
@@ -139,7 +152,7 @@ parseCfgOptions = P.ParseCfg
 
 
 parseOptions :: Parser Command
-parseOptions = Parse <$> gramCfgOptions <*> parseCfgOptions
+parseOptions = Parse <$> gramCfgOptions <*> topBotOption <*> parseCfgOptions
 
 
 --------------------------------------------------
@@ -148,7 +161,7 @@ parseOptions = Parse <$> gramCfgOptions <*> parseCfgOptions
 
 
 treesOptions :: Parser Command
-treesOptions = Trees <$> gramCfgOptions
+treesOptions = Trees <$> gramCfgOptions <*> topBotOption
 
 
 --------------------------------------------------
@@ -158,7 +171,11 @@ treesOptions = Trees <$> gramCfgOptions
 
 grammarOptions :: Parser Command
 grammarOptions = Grammar
-  <$> strOption
+  <$> switch
+     ( long "topbot"
+    <> short 't'
+    <> help "Turn on the top/bottom FS distinction" )
+  <*> strOption
      ( long "grammar"
     <> short 'g'
     <> metavar "FILE"
@@ -285,8 +302,10 @@ run cmd = case cmd of
 --             B.printAuto buildData
 --          Trees buildData ->
 --             B.printTrees buildData
-         Grammar grammarPath ->
-            G.printGrammar grammarPath
+         Grammar useTopBot grammarPath -> do
+           if useTopBot
+             then G.printGrammar G.avmP2 grammarPath
+             else G.printGrammar G.avmP1 grammarPath
          Lexicon lexPath useLex ->
            if useLex
            then Lex.printLexiconLex lexPath
@@ -301,10 +320,14 @@ run cmd = case cmd of
 --             S.statsOn cfg buildData
 --          Rules buildData ->
 --             B.printRules buildData
-         Parse gramCfg parseCfg ->
-            P.parseAll parseCfg gramCfg
-         Trees gramCfg ->
-            P.printETs gramCfg
+         Parse gramCfg topBot parseCfg -> do
+           let parseAll = P.parseAll parseCfg gramCfg
+           if topBot then parseAll E.TopBot else parseAll E.Simple
+         Trees gramCfg topBot -> do
+           let printETs = P.printETs gramCfg
+           if topBot
+             then printETs E.TopBot
+             else printETs E.Simple
 
 
 main :: IO ()

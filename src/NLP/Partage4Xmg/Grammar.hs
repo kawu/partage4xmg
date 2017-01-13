@@ -26,6 +26,9 @@ module NLP.Partage4Xmg.Grammar
 , parseGrammar
 , readGrammar
 , printGrammar
+-- ** Parsing AVMs
+, avmP1
+, avmP2
 
 -- * Utils
 , attrValQ
@@ -112,10 +115,10 @@ type SubType = T.Text
 
 -- | Non-terminal or terminal.
 -- TODO: change the name.
-data NonTerm = NonTerm
+data NonTerm avm = NonTerm
     { typ   :: Type
     , sym   :: Sym
-    , avm   :: AVM2 }
+    , avm   :: avm }
 --     , phonEps :: Bool
 --       -- ^ Phonetically empty?
 --     , avm   :: AVM }
@@ -143,7 +146,7 @@ botOnly avm = AVM2 {top = Nothing, bot = Just avm}
 
 
 -- | Partage4Xmg tree.
-type Tree = R.Tree NonTerm
+type Tree avm = R.Tree (NonTerm avm)
 
 
 -- | Name of a tree family.
@@ -186,20 +189,20 @@ type Family = T.Text
 
 
 -- | Grammar parser (as a parser).
-grammarP :: P [(Family, Tree)]
-grammarP = concat <$> every' grammarQ
+grammarP :: P avm -> P [(Family, Tree avm)]
+grammarP avmP = concat <$> every' (grammarQ avmP)
 
 
 -- | Grammar parser.
-grammarQ :: Q [(Family, Tree)]
-grammarQ = concat <$> (true //> entryQ)
+grammarQ :: P avm -> Q [(Family, Tree avm)]
+grammarQ avmP = concat <$> (true //> entryQ avmP)
 
 
 -- | Entry parser (family + one or more trees).
-entryQ :: Q [(Family, Tree)]
-entryQ = named "entry" `joinR` do
+entryQ :: P avm -> Q [(Family, Tree avm)]
+entryQ avmP = named "entry" `joinR` do
     famName <- first familyQ
-    trees <- every' treeQ
+    trees <- every' (treeQ avmP)
     return [(famName, t) | t <- trees]
 
 
@@ -209,27 +212,29 @@ familyQ = fmap L.toStrict $ named "family" `joinR` first (node name)
 
 
 -- | Tree parser.
-treeQ :: Q Tree
-treeQ = named "tree" `joinR` first nodeQ
+treeQ :: P avm -> Q (Tree avm)
+treeQ avmP = named "tree" `joinR` first (nodeQ avmP)
 
 
 -- | Node parser.
-nodeQ :: Q Tree
-nodeQ = (named "node" *> attr "type") `join` ( \typTxt -> R.Node
-        <$> first (nonTermQ typTxt)
-        <*> every' nodeQ )
+nodeQ :: P avm -> Q (Tree avm)
+nodeQ avmP = (named "node" *> attr "type") `join` ( \typTxt -> R.Node
+        <$> first (nonTermQ avmP typTxt)
+        <*> every' (nodeQ avmP) )
 
 
 -- | Non-terminal parser.
-nonTermQ :: L.Text -> Q NonTerm
-nonTermQ typ' = joinR (named "narg") $
+nonTermQ :: P avm -> L.Text -> Q (NonTerm avm)
+nonTermQ avmP typ' = joinR (named "narg") $
   first $ joinR (named "fs") $ do
     sym' <- first symQ
-    top' <- optional $ first $ avmQ "top"
-    bot' <- optional $ first $ avmQ "bot"
-    return $ NonTerm (parseTyp typ') sym' $ AVM2
-      { top = top'
-      , bot = bot' }
+    avm' <- avmP
+    return $ NonTerm (parseTyp typ') sym' avm'
+--     top' <- optional $ first $ avmQ avmP "top"
+--     bot' <- optional $ first $ avmQ avmP "bot"
+--     return $ NonTerm (parseTyp typ') sym' $ AVM2
+--       { top = top'
+--       , bot = bot' }
 
 
 -- | Syntagmatic value parser.
@@ -243,12 +248,22 @@ avmQ :: L.Text -> Q AVM
 avmQ name' =
   (named "f" *> hasAttrVal "name" name')
   `joinR`
-  first (named "fs" `joinR` avmP)
+  first (named "fs" `joinR` avmP1)
 
 
 -- | AVM parser.
-avmP :: P AVM
-avmP = M.fromList <$> every attrValQ
+avmP1 :: P AVM
+avmP1 = M.fromList <$> every attrValQ
+
+
+-- | AVM2 parser.
+avmP2 :: P AVM2
+avmP2 = do
+  top' <- optional $ first $ avmQ "top"
+  bot' <- optional $ first $ avmQ "bot"
+  return $ AVM2
+    { top = top'
+    , bot = bot' }
 
 
 -- | An attribute/value parser.
@@ -297,28 +312,40 @@ parseTyp x = case x of
 
 
 -- | Parse textual contents of the French TAG XML file.
-parseGrammar :: L.Text -> M.Map Family (S.Set Tree)
-parseGrammar txt =
+parseGrammar
+  :: (Ord avm, Show avm)
+  => P avm
+  -> L.Text
+  -> M.Map Family (S.Set (Tree avm))
+parseGrammar avmP txt =
   flip E.execState M.empty $ E.forM_ ts $ \(family, tree) -> do
     length (show tree) `seq`
       E.modify' (M.insertWith S.union family
                  (S.singleton tree))
   where
-    ts = F.concat . evalP grammarP . parseForest . TagSoup.parseTags $ txt
+    ts = F.concat . evalP (grammarP avmP) . parseForest . TagSoup.parseTags $ txt
 
 
 -- | Parse the stand-alone French TAG xml file.
 -- readGrammar :: FilePath -> IO [(Family, Tree)]
-readGrammar :: FilePath -> IO (M.Map Family (S.Set Tree))
-readGrammar path = parseGrammar <$> L.readFile path
+readGrammar
+  :: (Ord avm, Show avm)
+  => P avm
+  -> FilePath
+  -> IO (M.Map Family (S.Set (Tree avm)))
+readGrammar avmP path = parseGrammar avmP <$> L.readFile path
 
 
-printGrammar :: FilePath -> IO ()
-printGrammar =
+printGrammar
+  :: (Ord avm, Show avm)
+  => P avm
+  -> FilePath
+  -> IO ()
+printGrammar avmP =
   let printTree (famName, ts) = do
         putStrLn $ "### " ++ show famName ++ " ###"
         E.forM_ ts $ putStrLn . R.drawTree . fmap show
-  in  mapM_ printTree . M.toList <=< readGrammar
+  in  mapM_ printTree . M.toList <=< readGrammar avmP
 
 
 -------------------------------------------------

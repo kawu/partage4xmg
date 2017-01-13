@@ -45,9 +45,8 @@ import qualified NLP.Partage.Earley.Deriv   as Deriv
 import qualified NLP.Partage4Xmg.Lexicon    as Lex
 import qualified NLP.Partage4Xmg.Morph      as Morph
 import qualified NLP.Partage4Xmg.Grammar    as Gram
-import qualified NLP.Partage4Xmg.Ensemble.Common as Ens
--- import qualified NLP.Partage4Xmg.Ensemble   as Ens
-import           NLP.Partage4Xmg.Ensemble.Common
+import qualified NLP.Partage4Xmg.Ensemble as Ens
+import           NLP.Partage4Xmg.Ensemble
                  (Tree, FSTree, NonTerm, Term, Val) --, CFS)
 
 -- import Debug.Trace (trace)

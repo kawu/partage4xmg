@@ -13,8 +13,7 @@ import qualified Data.Char as C
 import qualified NLP.Partage4Xmg.Grammar as G
 import qualified NLP.Partage4Xmg.Lexicon as Lex
 import qualified NLP.Partage4Xmg.Morph as Morph
--- import qualified NLP.Partage4Xmg.Ensemble as E
-import qualified NLP.Partage4Xmg.Ensemble.Common as E
+import qualified NLP.Partage4Xmg.Ensemble as E
 import qualified NLP.Partage4Xmg.Parse as P
 -- import qualified NLP.Partage4Xmg.Gen as G
 -- import qualified NLP.Partage4Xmg.GenLex as GL

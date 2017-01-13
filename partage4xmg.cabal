@@ -40,9 +40,7 @@ library
         NLP.Partage4Xmg.Morph
       , NLP.Partage4Xmg.Lexicon
       , NLP.Partage4Xmg.Grammar
-      , NLP.Partage4Xmg.Ensemble.Common
-      -- , NLP.Partage4Xmg.Ensemble
-      -- , NLP.Partage4Xmg.Ensemble.TopBot
+      , NLP.Partage4Xmg.Ensemble
       , NLP.Partage4Xmg.Parse
 --       , NLP.Partage4Xmg.Build
 --       , NLP.Partage4Xmg.Stats

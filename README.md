@@ -9,8 +9,9 @@ Haskell library dedicated to parsing *tree adjoining grammars* (TAGs), with
 Installation
 ------------
 
-It is recommanded to install *partage* using the [Haskell Tool Stack][stack],
-which you will need to download and install on your machine beforehand.
+It is recommanded to install *ParTAGe4XMG* using the
+[Haskell Tool Stack][stack], which you will need to download and install on your
+machine beforehand.
 Then:
 * Create an empty directory, which will be dedicated for the ParTAGe source code,
 * Clone the `simple` branch of the [ParTAGe][partage] repository into this empty directory,
@@ -31,6 +32,24 @@ the `~/.local/bin` directory.  You can either add this directory to your `$PATH`
 or use the full path to run `partage4xmg`:
 
     $ ~/.local/bin/partage4xmg --help
+    
+
+### Update
+
+To update the *ParTAGe4XMG* tool, use `git pull` in both repositories downloaded
+during installation and run `stack install --force-dirty` in the local copy of
+`partage4xmg`.
+Under linux, assuming that you are in the `partage-src` directory, you can use
+the following sequence of commands to perform the update:
+
+    cd partage
+    git pull
+    cd ../partage4xmg
+    git pull
+    stack install --force-dirty
+
+The usage of `--force-dirty` ensures that `stack` does not overlook any of the
+modifications pulled from the upstream repositories.
 
 
 Examples of usage
@@ -48,6 +67,29 @@ especially if the input `.xml` files are big.
 If you have several sentences to parse, you can write them in a single file and
 provide it as input for the parser, which will then read and process them one by
 one.
+
+
+### Derivations
+
+If you want the parser to pretty print derivations rather than derived trees,
+use the `-d` (`--derivations`) option, as in:
+
+    echo "a sentence to parse" | partage4xmg parse -g grammar.xml -l lemma.xml -m morph.xml -s S -d
+
+
+### Feature structures
+
+To enable support for feature structures (FSs), use the `-u` (`--use-features`)
+option. Note that at the moment the parser reports FSs only for derivations and
+not for derived trees.
+
+By default, the parser assumes that there is no distinction between the *top*
+and the *bottom* FSs, i.e., that there is only one FS per elementary tree node.
+You can enable the (**experimental**!) support for the *top*/*bottom*
+distinction by using the `-t` (`--topbot`) option.
+
+
+### Tokenization
 
 *At the moment the command-line tool does not implement any smart tokenization
 strategies and it assumes that you supply the input sentences with words

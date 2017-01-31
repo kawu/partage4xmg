@@ -130,20 +130,24 @@ parseCfgOptions = P.ParseCfg
 --          <> long "max-size"
 --          <> short 'm' )
   <$> strOption
-        ( metavar "START-SYM"
-       <> long "start-sym"
-       <> short 's' )
+        ( metavar "AXIOM-SYM"
+       <> long "axiom-sym"
+       <> short 's'
+       <> help ( "Axiom symbol of the grammar (print only trees "
+              ++ "with the AXIOM-SYM in their roots)" )
+        )
   <*> option auto
      ( metavar "PRINT-PARSED"
        <> value 10
        <> long "print-parsed"
-       <> short 'p' )
+       <> short 'p'
+       <> help "Print at most PRINT-PARSED trees" )
   <*> switch
      ( -- metavar "USE-FEATURES"
           long "use-features"
        -- <> value True
-       <> help "Use FS unification"
-       <> short 'u' )
+       <> short 'u'
+       <> help "Use FS unification" )
   <*> switch
      (    long "derivations"
        <> short 'd'

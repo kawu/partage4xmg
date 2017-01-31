@@ -224,8 +224,8 @@ parseAll ParseCfg{..} gramCfg avmTyp = do
         input  = T.words line
     hype <- parseIt avmTyp gram input
     if printDeriv then do
-      let parseSet = Deriv.derivTrees hype begSym (length input)
-      forM_ (take printParsed $ parseSet) $ \t0 -> do
+      let parseSet () = Deriv.derivTrees hype begSym (length input)
+      forM_ (take printParsed $ parseSet ()) $ \t0 -> do
         let showPrintNode = Deriv.showPrintNode showPair
             showPair (node, mayAvm) =
               O.showNode T.unpack showTok node ++ " " ++
@@ -233,11 +233,25 @@ parseAll ParseCfg{..} gramCfg avmTyp = do
             showTok Tok{..} = show position ++ " " ++ T.unpack terminal
         -- let t = fmap (fmap $ showCFS avmTyp) t0
         putStrLn . R.drawTree . fmap showPrintNode . Deriv.deriv4show $ t0
+      reportTreeNum line printParsed (parseSet ())
     else do
-      let parseSet = Earley.parsedTrees hype begSym (length input)
-      forM_ (take printParsed $ parseSet) $ \t -> do
+      let parseSet () = Earley.parsedTrees hype begSym (length input)
+      forM_ (take printParsed $ parseSet ()) $ \t -> do
         -- putStrLn . R.drawTree . fmap show . O.encode . Left $ t
         putStrLn . R.drawTree . fmap (O.showNode T.unpack T.unpack) . O.encode . Left $ t
+      reportTreeNum line printParsed (parseSet ())
+
+
+-- | Report the number of parsed (or derivation) trees.
+reportTreeNum :: T.Text -> Int -> [a] -> IO ()
+reportTreeNum input maxNum parseSet = do
+  let n = length parseSet
+      treeStr = if n > 1 || n == 0 then "trees" else "tree"
+  if n < maxNum
+    then putStr $ show n ++ " " ++ treeStr ++ " found"
+    else putStr $ show n ++ " (or more) trees found"
+  putStrLn $ " for \"" ++ T.unpack input ++ "\""
+  putStrLn ""
 
 
 --------------------------------------------------

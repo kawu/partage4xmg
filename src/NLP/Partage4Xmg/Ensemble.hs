@@ -37,6 +37,7 @@ module NLP.Partage4Xmg.Ensemble
 
 
 import           Control.Arrow              (first)
+import           Control.Monad              (guard)
 import qualified Control.Monad.State.Strict as E
 
 import qualified Data.Text                  as T
@@ -230,7 +231,7 @@ getTrees avmTyp gram term ana
       -- let term = Morph.lemma ana
       converted <- withVarMap (convert (convertAVM avmTyp) tree)
       let fs = closeAVM avmTyp $ Morph.avm ana
-      anchor term fs converted
+      anchor term (Morph.word ana) fs converted
 
 
 -- | Convert and close the given XMG AVM.
@@ -335,7 +336,7 @@ convert convertAVM (R.Node G.NonTerm{..} xs) =
     G.Lex -> leaf . O.Term $ Term sym
     G.Other _ -> below $ O.NonTerm sym
   where
---     -- TODO: provisional solutino, top and bot should be distinguished
+--     -- TODO: provisional solution, top and bot should be distinguished
 --     avm = maybe M.empty id (top <|> bot)
     below x = do
       -- fs <- mkFS
@@ -360,22 +361,28 @@ convert convertAVM (R.Node G.NonTerm{..} xs) =
 anchor
   :: (Ord key, Show key)
   => Term                -- ^ Terminal used to replace the anchor
+  -> Lex.Word            -- ^ The corresponding word interpretation (containing
+                         --   relevant part-of-speech information)
   -> FS.CFS key Val      -- ^ The accompanying FS
   -> FSTree ATerm key    -- ^ `FSTree` with an anchor
   -> Env.EnvM Val (FSTree ATerm key)
-anchor anc newFS (R.Node label@(typ, oldFS) xs) = case typ of
-  O.NonTerm _ -> R.Node label <$> mapM (anchor anc newFS) xs
-  O.Foot _ -> return $ R.Node label []
-  O.Term t -> case t of
-    Term _ -> return $ R.Node label []
-    Anchor sym -> do
-      newFS' <- FS.reopen newFS
-      fs <- FS.unifyFS oldFS newFS'
---       env <- E.get
---       trace (show newFS) $ trace (show oldFS) $
---         trace (show newFS') $ trace (show fs) $ trace (show env) $
-      let leaf = R.Node (O.Term (Term anc), M.empty) []
-      return $ R.Node (O.NonTerm sym, fs) [leaf]
+anchor anc wordInterp newFS =
+  go
+  where
+    go (R.Node label@(typ, oldFS) xs) = case typ of
+      O.NonTerm _ -> R.Node label <$> mapM go xs
+      O.Foot _ -> return $ R.Node label []
+      O.Term t -> case t of
+        Term _ -> return $ R.Node label []
+        Anchor sym -> do
+          guard $ sym == Lex.cat wordInterp
+          newFS' <- FS.reopen newFS
+          fs <- FS.unifyFS oldFS newFS'
+    --       env <- E.get
+    --       trace (show newFS) $ trace (show oldFS) $
+    --         trace (show newFS') $ trace (show fs) $ trace (show env) $
+          let leaf = R.Node (O.Term (Term anc), M.empty) []
+          return $ R.Node (O.NonTerm sym, fs) [leaf]
 
 
 -- | Extract the tree embedded in the environment and the accompanying computation.

@@ -193,7 +193,7 @@ readGrammar GramCfg{..} avmTyp = do
         TopBot -> G.avmP2
   treeMap' <- G.readGrammar avmP treePath
   return Grammar
-    { morphMap = M.fromList
+    { morphMap = M.fromListWith S.union
       [ (Morph.wordform x, Morph.analyzes x)
       | x <- xs ]
     , lexMap = M.fromList ys

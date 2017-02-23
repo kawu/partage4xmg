@@ -48,12 +48,12 @@ import           Data.Maybe                 (maybeToList)
 import qualified Pipes                      as P
 import qualified Pipes.Prelude              as P
 
-import qualified NLP.Partage.Tree.Comp      as C
 import qualified NLP.Partage.Tree.Other     as O
 import qualified NLP.Partage.FS             as FS
 import qualified NLP.Partage.FSTree         as FSTree
 import qualified NLP.Partage.FSTree2        as FSTree2
 import qualified NLP.Partage.Env            as Env
+import qualified NLP.Partage.Earley.Comp    as C
 
 import qualified NLP.Partage4Xmg.Lexicon    as Lex
 import qualified NLP.Partage4Xmg.Morph      as Morph

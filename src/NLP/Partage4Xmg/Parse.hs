@@ -37,9 +37,9 @@ import qualified NLP.Partage.FS             as FS
 import qualified NLP.Partage.FSTree2        as FSTree
 import qualified NLP.Partage.Env            as Env
 import qualified NLP.Partage.Auto.Trie      as Trie
-import qualified NLP.Partage.Tree.Comp      as C
 import qualified NLP.Partage.Tree.Other     as O
 import           NLP.Partage.Earley.Base    (Tok(..))
+import qualified NLP.Partage.Earley.Comp    as C
 import qualified NLP.Partage.Earley.Deriv   as Deriv
 
 import qualified NLP.Partage4Xmg.Lexicon    as Lex
@@ -79,7 +79,7 @@ data ParseCfg = ParseCfg
 -- corresponding feature structures.
 mkAutoFS :: [(Tree Term, C.Comp a)] -> Earley.Auto NonTerm Term a
 mkAutoFS gram =
-  let dag = DAG.mkGram gram
+  let dag = DAG.mkGramWith C.or gram
       tri = Trie.fromGram (DAG.factGram dag)
   in  Earley.mkAuto (DAG.dagGram dag) tri
 
@@ -87,7 +87,7 @@ mkAutoFS gram =
 -- | Create an automaton from a list of lexicalized elementary trees.
 mkAuto :: [Tree Term] -> Earley.Auto NonTerm Term (FS.CFS key Val)
 mkAuto =
-  let dummy = C.Comp (const $ Just M.empty) C.dummyTopDown
+  let dummy = C.Comp (const [M.empty]) C.dummyTopDown
   in  mkAutoFS . map (,dummy)
 
 
@@ -122,8 +122,8 @@ compile = Ens.splitTree
 
 -- | Extract the underlying FSTree.
 extract
-  :: Env.EnvM Val (FSTree Term key)
-  -> Maybe (FSTree Term key)
+  :: Env.EnvM Val (FSTree Term k)
+  -> Maybe (R.Tree (Ens.Node Term, FS.CFS k Val))
 extract = FSTree.extract
 
 
@@ -138,7 +138,8 @@ parseWith
   -> IO (Earley.Hype NonTerm Term (FS.CFS key Val))
 parseWith avmTyp gram sent = do
   let elemTrees
-        = map fst . M.toList . M.fromList
+        = S.toList . S.fromList
+        . map fst
         . mapMaybe compile
         . concatMap (gramOn avmTyp gram)
         $ sent
@@ -158,11 +159,11 @@ parseWithFS
   -> IO (Earley.Hype T.Text T.Text (FS.CFS key Val))
 parseWithFS avmTyp gram sent = do
   let elemTrees
-        = M.fromList
-        . mapMaybe compile
+        -- = M.fromList <- this was WRONG
+        = mapMaybe compile
         . concatMap (gramOn avmTyp gram)
         $ sent
-      auto = mkAutoFS (M.toList elemTrees)
+      auto = mkAutoFS elemTrees -- (M.toList elemTrees)
       input = [S.singleton (x, M.empty) | x <- sent]
 --       input =
 --         [ S.fromList
@@ -198,8 +199,12 @@ printETs gramCfg avmTyp = do
       putStrLn ""
       let elemTrees = mapMaybe extract $ gramOn avmTyp gram word
       forM_ elemTrees $
-        putStrLn . R.drawTree . fmap show
+        putStrLn . R.drawTree . fmap showPair
       -- putStrLn ""
+  where
+    showPair (node, avm) =
+      O.showNode T.unpack T.unpack node ++ " " ++
+      showCFS avmTyp avm
 
 
 --------------------------------------------------

@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TupleSections #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 
@@ -23,6 +24,7 @@ module NLP.Partage4Xmg.Morph
 
 import           Control.Applicative ((<|>), many, optional)
 import           Control.Monad       ((<=<))
+import qualified Control.Arrow       as Arr
 
 import           Data.Function       (on)
 import           Data.List           (groupBy)
@@ -39,6 +41,8 @@ import qualified Data.Attoparsec.Text.Lazy as A
 import qualified Text.HTML.TagSoup   as TagSoup
 import           Text.XML.PolySoup   hiding (P, Q, name)
 import qualified Text.XML.PolySoup   as PolySoup
+
+import           NLP.Partage.FSTree2 (Loc(..))
 
 import qualified NLP.Partage4Xmg.Lexicon as Lex
 import qualified NLP.Partage4Xmg.Grammar as G
@@ -120,7 +124,11 @@ lemmaRefQ = do
 
 -- | AVM parser.
 avmQ :: Q G.AVM
-avmQ = M.fromList <$> joinR (named "fs") (every' G.attrValQ)
+avmQ = joinR
+  (named "fs")
+  (concatMap mkFeat <$> every' G.attrValQ)
+  where
+    mkFeat (x, v) = (,v) <$> [Top x, Bot x]
 
 
 -- -- | An attribute/value parser.
@@ -225,12 +233,13 @@ parseAvm x =
 avmA :: A.Parser G.AVM
 avmA = do
   xs <- between "[" "]" $ many (attrValA <* optional (A.char ';'))
-  return $ M.fromList xs
+  return $ concatMap mkFeat xs
   where
     between p q x = p *> x <* q
+    mkFeat (x, v) = (,v) <$> [Top x, Bot x]
 
 
-attrValA :: A.Parser (T.Text, Either G.Val G.Var)
+attrValA :: A.Parser (G.Attr, Either G.Val G.Var)
 attrValA = do
   x <- many_ A.space *> idenA
   many_ A.space *> A.char '='

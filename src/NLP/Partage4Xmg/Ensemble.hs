@@ -23,7 +23,6 @@ module NLP.Partage4Xmg.Ensemble
 
 -- * Reading
 , GramCfg(..)
-, AvmTyp (..)
 , readGrammar
 
 -- * FS-aware tree conversion
@@ -95,7 +94,7 @@ type Tree t = R.Tree (Node t)
 
 
 -- | FS key.
-type Key = T.Text
+type Key = G.Feat
 
 
 -- | FS value.
@@ -112,15 +111,15 @@ type FSTree t k = FSTree.FSTree NonTerm t k
 
 
 -- | All the components of a grammar.
-data Grammar avm = Grammar
+data Grammar = Grammar
   { morphMap :: M.Map T.Text (S.Set Morph.Ana)
   , lexMap   :: M.Map Lex.Word (S.Set G.Family)
-  , treeMap  :: M.Map G.Family (S.Set (G.Tree avm))
+  , treeMap  :: M.Map G.Family (S.Set G.Tree)
   }
 
 
 -- | Map a given word to the set of its possible interpretations.
-getInterps :: Grammar avm -> T.Text -> S.Set Morph.Ana
+getInterps :: Grammar -> T.Text -> S.Set Morph.Ana
 getInterps Grammar{..} orth =
 --   seq printMap $
 --   trace (show orth) $
@@ -140,7 +139,7 @@ getInterps Grammar{..} orth =
 
 
 -- | Retrieve the set of grammar trees related to te given interpretation.
-_getTrees :: (Ord avm) => Grammar avm -> Morph.Ana -> S.Set (G.Tree avm)
+_getTrees :: Grammar -> Morph.Ana -> S.Set G.Tree
 _getTrees Grammar{..} ana = S.unions
   [ treeSet
   | famSet <- maybeToList $ M.lookup (Morph.word ana) lexMap
@@ -153,13 +152,6 @@ _getTrees Grammar{..} ana = S.unions
 --------------------------------------------------
 -- Config
 --------------------------------------------------
-
-
--- | Type allowing to determine the AVM type to use.
-data AvmTyp t k where
-  Simple :: AvmTyp G.AVM Key
-  TopBot :: AvmTyp G.AVM2 (FSTree2.Loc Key)
-  -- deriving (Show, Read, Eq, Ord)
 
 
 -- | Grammar configuration.
@@ -176,11 +168,9 @@ data GramCfg = GramCfg
 
 -- | Read the grammar given the configuration.
 readGrammar
-  :: (Ord avm, Show avm)
-  => GramCfg
-  -> AvmTyp avm key
-  -> IO (Grammar avm)
-readGrammar GramCfg{..} avmTyp = do
+  :: GramCfg
+  -> IO Grammar
+readGrammar GramCfg{..} = do
   xs <- if useMph
     then Morph.readMorphMph morphPath
     else Morph.readMorph morphPath
@@ -188,10 +178,7 @@ readGrammar GramCfg{..} avmTyp = do
     then Lex.readLexiconLex lexPath
     else Lex.readLexicon lexPath
   -- zs <- G.readGrammar treePath
-  let avmP = case avmTyp of
-        Simple -> G.avmP1
-        TopBot -> G.avmP2
-  treeMap' <- G.readGrammar avmP treePath
+  treeMap' <- G.readGrammar treePath
   return Grammar
     { morphMap = M.fromListWith S.union
       [ (Morph.wordform x, Morph.analyzes x)
@@ -211,16 +198,14 @@ readGrammar GramCfg{..} avmTyp = do
 
 -- | Retrieve the FS-aware grammar ETs related to te given interpretation.
 getTrees
-  :: (Ord avm, Ord key, Show key)
-  => AvmTyp avm key
-  -> Grammar avm
+  :: Grammar
   -> Term
      -- ^ A wordform
   -> Morph.Ana
      -- ^ The analysis corresponding the wordform
   -- -> [(Tree Term, C.Comp CFS)]
-  -> [Env.EnvM Val (FSTree Term key)]
-getTrees avmTyp gram term ana
+  -> [Env.EnvM Val (FSTree Term Key)]
+getTrees gram term ana
   -- = mapMaybe process
   = map process
   . S.toList
@@ -229,54 +214,23 @@ getTrees avmTyp gram term ana
     -- process tree = splitFSTree . fmap simplifyFS $ do
     process tree = fmap simplify $ do
       -- let term = Morph.lemma ana
-      converted <- withVarMap (convert (convertAVM avmTyp) tree)
-      let fs = closeAVM avmTyp $ Morph.avm ana
+      converted <- withVarMap (convert tree)
+      let fs = closeAVM $ Morph.avm ana
       anchor term (Morph.word ana) fs converted
 
 
 -- | Convert and close the given XMG AVM.
-closeAVM :: AvmTyp avm key -> G.AVM -> FS.CFS key Val
-closeAVM avmTyp avm = maybe M.empty id . fst . Env.runEnvM $ do
-  fs <- withVarMap $ case avmTyp of
-          Simple -> convertAVM1 avm
-          -- below, we make it bottom only because in the corresponding
-          -- anchor nodes features are assigned to bottom FS only too.
-          TopBot -> convertAVM2 (G.botOnly avm)
+closeAVM :: G.AVM -> FS.CFS Key Val
+closeAVM avm = maybe M.empty id . fst . Env.runEnvM $ do
+  fs <- withVarMap $ convertAVM avm
   FS.close fs
 
 
 -- | Convert an XMG-style AVM to a FS.
-convertAVM :: AvmTyp avm key -> avm -> E.StateT VarMap (Env.EnvM Val) (FS.OFS key)
-convertAVM avmTyp = case avmTyp of
-  Simple -> convertAVM1
-  TopBot -> convertAVM2
-
-
--- | Convert an XMG-style AVM to a FS.
-convertAVM1 :: G.AVM -> E.StateT VarMap (Env.EnvM Val) (FS.OFS Key)
-convertAVM1 avm = fmap M.fromList . runListT $ do
-  (key, valVar) <- each (M.toList avm)
+convertAVM :: G.AVM -> E.StateT VarMap (Env.EnvM Val) (FS.OFS Key)
+convertAVM avm = fmap M.fromList . runListT $ do
+  (key, valVar) <- each avm
   case valVar of
-    Left val -> P.lift . P.lift $ do
-      var <- Env.var
-      Env.set var val
-      return (key, var)
-    Right var0 -> do
-      var <- P.lift $ varFor var0
-      return (key, var)
-
-
--- | Convert an XMG-style AVM to a FS.
-convertAVM2 :: G.AVM2 -> E.StateT VarMap (Env.EnvM Val) (FS.OFS (FSTree2.Loc Key))
-convertAVM2 avm = fmap M.fromList . runListT $ do
-  let topList = maybe [] M.toList (G.top avm)
-      botList = maybe [] M.toList (G.bot avm)
-      xs = map (first FSTree2.Top) topList ++
-           map (first FSTree2.Bot) botList
-  (key, valVar) <- each xs
-  case valVar of
-    -- Left val -> return (key, FS.Val . S.fromList $ S.toList val)
-    -- Left val -> return (key, FS.Val val)
     Left val -> P.lift . P.lift $ do
       var <- Env.var
       Env.set var val
@@ -321,10 +275,9 @@ simplify = fmap $ first simplifyNode
 
 -- | Convert the parsed tree to the required form.
 convert
-  :: (avm -> E.StateT VarMap (Env.EnvM Val) (FS.OFS key))
-  -> G.Tree avm
-  -> E.StateT VarMap (Env.EnvM Val) (FSTree ATerm key)
-convert convertAVM (R.Node G.NonTerm{..} xs) =
+  :: G.Tree
+  -> E.StateT VarMap (Env.EnvM Val) (FSTree ATerm Key)
+convert (R.Node G.NonTerm{..} xs) =
   case typ of
     G.Std -> below $ O.NonTerm sym
     G.Foot -> leaf $ O.Foot sym
@@ -341,7 +294,7 @@ convert convertAVM (R.Node G.NonTerm{..} xs) =
     below x = do
       -- fs <- mkFS
       fs <- convertAVM avm
-      R.Node (x, fs) <$> mapM (convert convertAVM) xs
+      R.Node (x, fs) <$> mapM convert xs
     leaf x = do
       -- fs <- mkFS
       fs <- convertAVM avm
@@ -387,11 +340,10 @@ anchor anc wordInterp newFS =
 
 -- | Extract the tree embedded in the environment and the accompanying computation.
 splitTree
-  :: (Ord key, Show key)
-  => Env.EnvM Val (FSTree Term key)
-  -> Maybe (Tree Term, C.Comp (FS.CFS key Val))
+  :: Env.EnvM Val (FSTree Term Key)
+  -> Maybe (Tree Term, C.Comp (FS.CFS Key Val))
 splitTree source = do
-  let comp = FSTree.compile source
+  let comp = FSTree2.compile source
   tree <- fmap fst <$> FSTree.extract source
   return (tree, comp)
 

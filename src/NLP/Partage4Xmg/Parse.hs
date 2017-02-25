@@ -35,6 +35,7 @@ import qualified NLP.Partage.Earley         as Earley
 import qualified NLP.Partage.Tree           as Parsed
 import qualified NLP.Partage.FS             as FS
 import qualified NLP.Partage.FSTree2        as FSTree
+import           NLP.Partage.FSTree2        (Loc(..))
 import qualified NLP.Partage.Env            as Env
 import qualified NLP.Partage.Auto.Trie      as Trie
 import qualified NLP.Partage.Tree.Other     as O
@@ -47,7 +48,7 @@ import qualified NLP.Partage4Xmg.Morph      as Morph
 import qualified NLP.Partage4Xmg.Grammar    as Gram
 import qualified NLP.Partage4Xmg.Ensemble as Ens
 import           NLP.Partage4Xmg.Ensemble
-                 (Tree, FSTree, NonTerm, Term, Val) --, CFS)
+                 (Tree, FSTree, NonTerm, Term, Key, Val) --, CFS)
 
 -- import Debug.Trace (trace)
 
@@ -93,75 +94,68 @@ mkAuto =
 
 -- | Retieve the set of ETs for the given grammar and the given terminal.
 gramOn
-  :: (Ord avm, Ord key, Show key)
-  => Ens.AvmTyp avm key
-  -> Ens.Grammar avm
+  :: Ens.Grammar
   -- ^ The TAG grammar
   -> Term
   -- ^ The terminal
   -- -> M.Map (Tree Term) (C.Comp CFS)
-  -> [Env.EnvM Val (FSTree Term key)]
-gramOn avmTyp gram word =
+  -> [Env.EnvM Val (FSTree Term Key)]
+gramOn gram word =
   -- trace (show interpSet) $ elemTrees
   elemTrees
   where
     interpSet = Ens.getInterps gram word
     elemTrees = concat
-      [ Ens.getTrees avmTyp gram word interp
+      [ Ens.getTrees gram word interp
       | interp <- S.toList interpSet ]
 
 
 -- | Compile the given tree into a grammar tree and the corresponding
 -- computation.
 compile
-  :: (Ord key, Show key)
-  => Env.EnvM Val (FSTree Term key)
-  -> Maybe (Tree Term, C.Comp (FS.CFS key Val))
+  :: Env.EnvM Val (FSTree Term Key)
+  -> Maybe (Tree Term, C.Comp (FS.CFS Key Val))
 compile = Ens.splitTree
 
 
 -- | Extract the underlying FSTree.
 extract
-  :: Env.EnvM Val (FSTree Term k)
-  -> Maybe (R.Tree (Ens.Node Term, FS.CFS k Val))
+  :: Env.EnvM Val (FSTree Term Key)
+  -> Maybe (R.Tree (Ens.Node Term, FS.CFS Key Val))
 extract = FSTree.extract
 
 
 -- | Parse the given sentence from the given start symbol with the given grammar.
 parseWith
-  :: (Ord avm, Ord key, Show key)
-  => Ens.AvmTyp avm key
-  -> Ens.Grammar avm
+  :: Ens.Grammar
   -- ^ The TAG grammar
   -> [T.Text]
   -- ^ The sentence to parse
-  -> IO (Earley.Hype NonTerm Term (FS.CFS key Val))
-parseWith avmTyp gram sent = do
+  -> IO (Earley.Hype NonTerm Term (FS.CFS Key Val))
+parseWith gram sent = do
   let elemTrees
         = S.toList . S.fromList
         . map fst
         . mapMaybe compile
-        . concatMap (gramOn avmTyp gram)
+        . concatMap (gramOn gram)
         $ sent
       auto = mkAuto elemTrees
-      input = map (S.singleton . (, M.empty :: FS.CFS key Val)) sent
+      input = map (S.singleton . (, M.empty :: FS.CFS Key Val)) sent
   Earley.earleyAuto auto . Earley.fromSets $ input
 
 
 -- | Like `parseWith` but with FS unification.
 parseWithFS
-  :: (Ord avm, Ord key, Show key)
-  => Ens.AvmTyp avm key
-  -> Ens.Grammar avm
+  :: Ens.Grammar
   -- ^ The TAG grammar
   -> [T.Text]
   -- ^ The sentence to parse
-  -> IO (Earley.Hype T.Text T.Text (FS.CFS key Val))
-parseWithFS avmTyp gram sent = do
+  -> IO (Earley.Hype T.Text T.Text (FS.CFS Key Val))
+parseWithFS gram sent = do
   let elemTrees
         -- = M.fromList <- this was WRONG
         = mapMaybe compile
-        . concatMap (gramOn avmTyp gram)
+        . concatMap (gramOn gram)
         $ sent
       auto = mkAutoFS elemTrees -- (M.toList elemTrees)
       input = [S.singleton (x, M.empty) | x <- sent]
@@ -185,26 +179,24 @@ parseWithFS avmTyp gram sent = do
 -- | Read the grammar from the input file, sentences to parse from std input,
 -- and show the extracted grammar trees (no FSs, though).
 printETs
-  :: (Ord avm, Show avm, Ord key, Show key)
-  => Ens.GramCfg
-  -> Ens.AvmTyp avm key
+  :: Ens.GramCfg
   -> IO ()
-printETs gramCfg avmTyp = do
-  gram <- Ens.readGrammar gramCfg avmTyp
+printETs gramCfg = do
+  gram <- Ens.readGrammar gramCfg
   lines <- map L.toStrict . L.lines <$> L.getContents
   forM_ lines $ \line -> do
     let input  = T.words line
     forM_ input $ \word -> do
       putStrLn $ "<<WORD: " ++ T.unpack word ++ ">>"
       putStrLn ""
-      let elemTrees = mapMaybe extract $ gramOn avmTyp gram word
+      let elemTrees = mapMaybe extract $ gramOn gram word
       forM_ elemTrees $
         putStrLn . R.drawTree . fmap showPair
       -- putStrLn ""
   where
     showPair (node, avm) =
       O.showNode T.unpack T.unpack node ++ " " ++
-      showCFS avmTyp avm
+      showCFS avm
 
 
 --------------------------------------------------
@@ -215,28 +207,26 @@ printETs gramCfg avmTyp = do
 -- | Read the grammar from the input file, sentences to parse from
 -- std input, and perform the experiment.
 parseAll
-  :: (Ord avm, Show avm, Ord key, Show key)
-  => ParseCfg
+  :: ParseCfg
   -> Ens.GramCfg
-  -> Ens.AvmTyp avm key
   -> IO ()
-parseAll ParseCfg{..} gramCfg avmTyp = do
-  gram <- Ens.readGrammar gramCfg avmTyp
+parseAll ParseCfg{..} gramCfg = do
+  gram <- Ens.readGrammar gramCfg
   lines <- map L.toStrict . L.lines <$> L.getContents
   let parseIt = if useFS then parseWithFS  else parseWith
   forM_ lines $ \line -> do
     let begSym = T.pack startSym
         input  = T.words line
-    hype <- parseIt avmTyp gram input
+    hype <- parseIt gram input
     if printDeriv then do
       let parseSet () = Deriv.derivTrees hype begSym (length input)
       forM_ (take printParsed $ parseSet ()) $ \t0 -> do
         let showPrintNode = Deriv.showPrintNode showPair
             showPair (node, mayAvm) =
               O.showNode T.unpack showTok node ++ " " ++
-              showCFS avmTyp (maybe M.empty id mayAvm)
+              showCFS (maybe M.empty id mayAvm)
             showTok Tok{..} = show position ++ " " ++ T.unpack terminal
-        -- let t = fmap (fmap $ showCFS avmTyp) t0
+        -- let t = fmap (fmap $ showCFS) t0
         putStrLn . R.drawTree . fmap showPrintNode . Deriv.deriv4show $ t0
       reportTreeNum line printParsed (parseSet ())
     else do
@@ -264,10 +254,13 @@ reportTreeNum input maxNum parseSet = do
 --------------------------------------------------
 
 
-showCFS :: Ens.AvmTyp avm key -> FS.CFS key Val -> String
-showCFS avmTyp = case avmTyp of
-  Ens.Simple -> showGenCFS T.unpack
-  Ens.TopBot -> showGenCFS show
+showCFS :: FS.CFS Key Val -> String
+showCFS =
+  showGenCFS showKey
+  where
+    -- showKey (Sim x) = T.unpack x
+    showKey (Top x) = "t." ++ T.unpack x
+    showKey (Bot x) = "b." ++ T.unpack x
 
 
 showGenCFS :: (key -> String) -> FS.CFS key Val -> String

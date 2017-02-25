@@ -30,7 +30,7 @@ data Command
 --     = Build B.BuildData
 --     -- ^ Build an automaton
     -- | Parse -- ParseOptions
-    = Grammar Bool FilePath
+    = Grammar FilePath
     -- ^ Parse and show the input grammar
     | Lexicon FilePath Bool
     -- ^ Parse and print lexicon
@@ -44,10 +44,10 @@ data Command
 --     -- ^ Print trees (lexicon allowed, FSs removed)
 --     | Rules B.BuildData
 --     -- ^ Experimental mode
-    | Parse E.GramCfg Bool P.ParseCfg
+    | Parse E.GramCfg P.ParseCfg
 --     | Parse (E.GramCfg G.AVM2 (FSTree2.Loc E.Key)) P.ParseCfg
     -- ^ Experimental mode
-    | Trees E.GramCfg Bool
+    | Trees E.GramCfg
 --     | Trees (E.GramCfg G.AVM2 (FSTree2.Loc E.Key))
     -- ^ Show extracted ETs
 
@@ -114,11 +114,11 @@ gramCfgOptions = E.GramCfg
        <> help "Grammar .xml file" )
 
 
-topBotOption :: Parser Bool
-topBotOption = switch
-  ( long "topbot"
-    <> short 't'
-    <> help "Use top/bottom FS distinction" )
+-- topBotOption :: Parser Bool
+-- topBotOption = switch
+--   ( long "topbot"
+--     <> short 't'
+--     <> help "Use top/bottom FS distinction" )
 
 
 parseCfgOptions :: Parser P.ParseCfg
@@ -155,7 +155,8 @@ parseCfgOptions = P.ParseCfg
 
 
 parseOptions :: Parser Command
-parseOptions = Parse <$> gramCfgOptions <*> topBotOption <*> parseCfgOptions
+-- parseOptions = Parse <$> gramCfgOptions <*> topBotOption <*> parseCfgOptions
+parseOptions = Parse <$> gramCfgOptions <*> parseCfgOptions
 
 
 --------------------------------------------------
@@ -164,7 +165,7 @@ parseOptions = Parse <$> gramCfgOptions <*> topBotOption <*> parseCfgOptions
 
 
 treesOptions :: Parser Command
-treesOptions = Trees <$> gramCfgOptions <*> topBotOption
+treesOptions = Trees <$> gramCfgOptions -- <*> topBotOption
 
 
 --------------------------------------------------
@@ -174,11 +175,11 @@ treesOptions = Trees <$> gramCfgOptions <*> topBotOption
 
 grammarOptions :: Parser Command
 grammarOptions = Grammar
-  <$> switch
-     ( long "topbot"
-    <> short 't'
-    <> help "Turn on the top/bottom FS distinction" )
-  <*> strOption
+--   <$> switch
+--      ( long "topbot"
+--     <> short 't'
+--     <> help "Turn on the top/bottom FS distinction" )
+  <$> strOption
      ( long "grammar"
     <> short 'g'
     <> metavar "FILE"
@@ -305,10 +306,7 @@ run cmd = case cmd of
 --             B.printAuto buildData
 --          Trees buildData ->
 --             B.printTrees buildData
-         Grammar useTopBot grammarPath -> do
-           if useTopBot
-             then G.printGrammar G.avmP2 grammarPath
-             else G.printGrammar G.avmP1 grammarPath
+         Grammar grammarPath -> G.printGrammar grammarPath
          Lexicon lexPath useLex ->
            if useLex
            then Lex.printLexiconLex lexPath
@@ -323,14 +321,9 @@ run cmd = case cmd of
 --             S.statsOn cfg buildData
 --          Rules buildData ->
 --             B.printRules buildData
-         Parse gramCfg topBot parseCfg -> do
-           let parseAll = P.parseAll parseCfg gramCfg
-           if topBot then parseAll E.TopBot else parseAll E.Simple
-         Trees gramCfg topBot -> do
-           let printETs = P.printETs gramCfg
-           if topBot
-             then printETs E.TopBot
-             else printETs E.Simple
+         Parse gramCfg parseCfg -> P.parseAll parseCfg gramCfg
+           -- if topBot then parseAll E.TopBot else parseAll E.Simple
+         Trees gramCfg -> P.printETs gramCfg
 
 
 main :: IO ()

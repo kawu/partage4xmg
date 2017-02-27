@@ -34,7 +34,7 @@ import qualified NLP.Partage.DAG            as DAG
 import qualified NLP.Partage.Earley         as Earley
 import qualified NLP.Partage.Tree           as Parsed
 import qualified NLP.Partage.FS             as FS
-import qualified NLP.Partage.FSTree2        as FSTree
+import qualified NLP.Partage.FSTree2        as FST
 import           NLP.Partage.FSTree2        (Loc(..))
 import qualified NLP.Partage.Env            as Env
 import qualified NLP.Partage.Auto.Trie      as Trie
@@ -48,7 +48,7 @@ import qualified NLP.Partage4Xmg.Morph      as Morph
 import qualified NLP.Partage4Xmg.Grammar    as Gram
 import qualified NLP.Partage4Xmg.Ensemble as Ens
 import           NLP.Partage4Xmg.Ensemble
-                 (Tree, FSTree, NonTerm, Term, Key, Val) --, CFS)
+                 (Tree, FSTree, NonTerm, Term, Key, Val, CFS, OFS)
 
 -- import Debug.Trace (trace)
 
@@ -86,7 +86,7 @@ mkAutoFS gram =
 
 
 -- | Create an automaton from a list of lexicalized elementary trees.
-mkAuto :: [Tree Term] -> Earley.Auto NonTerm Term (FS.CFS key Val)
+mkAuto :: [Tree Term] -> Earley.Auto NonTerm Term (CFS key Val)
 mkAuto =
   let dummy = C.Comp (const [M.empty]) C.dummyTopDown
   in  mkAutoFS . map (,dummy)
@@ -114,15 +114,16 @@ gramOn gram word =
 -- computation.
 compile
   :: Env.EnvM Val (FSTree Term Key)
-  -> Maybe (Tree Term, C.Comp (FS.CFS Key Val))
+  -> Maybe (Tree Term, C.Comp (CFS Key Val))
 compile = Ens.splitTree
 
 
 -- | Extract the underlying FSTree.
 extract
   :: Env.EnvM Val (FSTree Term Key)
-  -> Maybe (R.Tree (Ens.Node Term, FS.CFS Key Val))
-extract = FSTree.extract
+  -- -> Maybe (R.Tree (Ens.Node Term, FS.CFS Key Val))
+  -> Maybe (FST.CFSTree NonTerm Term Key Val)
+extract = FST.extract
 
 
 -- | Parse the given sentence from the given start symbol with the given grammar.
@@ -131,7 +132,7 @@ parseWith
   -- ^ The TAG grammar
   -> [T.Text]
   -- ^ The sentence to parse
-  -> IO (Earley.Hype NonTerm Term (FS.CFS Key Val))
+  -> IO (Earley.Hype NonTerm Term (CFS Key Val))
 parseWith gram sent = do
   let elemTrees
         = S.toList . S.fromList
@@ -140,7 +141,7 @@ parseWith gram sent = do
         . concatMap (gramOn gram)
         $ sent
       auto = mkAuto elemTrees
-      input = map (S.singleton . (, M.empty :: FS.CFS Key Val)) sent
+      input = map (S.singleton . (, M.empty :: CFS Key Val)) sent
   Earley.earleyAuto auto . Earley.fromSets $ input
 
 
@@ -150,7 +151,7 @@ parseWithFS
   -- ^ The TAG grammar
   -> [T.Text]
   -- ^ The sentence to parse
-  -> IO (Earley.Hype T.Text T.Text (FS.CFS Key Val))
+  -> IO (Earley.Hype T.Text T.Text (CFS Key Val))
 parseWithFS gram sent = do
   let elemTrees
         -- = M.fromList <- this was WRONG
@@ -191,12 +192,13 @@ printETs gramCfg = do
       putStrLn ""
       let elemTrees = mapMaybe extract $ gramOn gram word
       forM_ elemTrees $
-        putStrLn . R.drawTree . fmap showPair
+        putStrLn . R.drawTree . fmap showNode
       -- putStrLn ""
   where
-    showPair (node, avm) =
-      O.showNode T.unpack T.unpack node ++ " " ++
-      showCFS avm
+    -- showNode (node, avm) =
+    showNode FST.Node{..} =
+      O.showNode T.unpack T.unpack treeNode ++ " " ++
+      showCFS featStr
 
 
 --------------------------------------------------
@@ -254,17 +256,17 @@ reportTreeNum input maxNum parseSet = do
 --------------------------------------------------
 
 
-showCFS :: FS.CFS Key Val -> String
-showCFS =
-  showGenCFS showKey
-  where
-    -- showKey (Sim x) = T.unpack x
-    showKey (Top x) = "t." ++ T.unpack x
-    showKey (Bot x) = "b." ++ T.unpack x
+-- showCFS :: CFS Key Val -> String
+-- showCFS =
+--   showGenCFS showKey
+--   where
+--     -- showKey (Sim x) = T.unpack x
+--     showKey (Top x) = "t." ++ T.unpack x
+--     showKey (Bot x) = "b." ++ T.unpack x
 
 
-showGenCFS :: (key -> String) -> FS.CFS key Val -> String
-showGenCFS showKey
+showCFS :: CFS Key Val -> String
+showCFS
   = between "{" "}"
   . intercalate ","
   . map showPair
@@ -280,9 +282,9 @@ showGenCFS showKey
       ++ "(" ++ show valID ++ ")"
     -- showKeys = intercalate "&" . map T.unpack . S.toList
     showVals = intercalate "|" . map T.unpack . S.toList
---     showKey key = case key of
---       FSTree.Top x -> "t." ++ T.unpack x
---       FSTree.Bot x -> "b." ++ T.unpack x
+    showKey key = case key of
+      FST.Top x -> "t." ++ T.unpack x
+      FST.Bot x -> "b." ++ T.unpack x
     between x y z = x ++ z ++ y
 
 -- showCFS =

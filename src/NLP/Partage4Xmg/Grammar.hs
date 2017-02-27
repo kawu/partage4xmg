@@ -112,11 +112,13 @@ data Type
     | Foot
     | Anchor
     | Lex
+    | NAdj
+      -- ^ Null adjoining constraint
     | Other SubType
     deriving (Show, Eq, Ord)
 
 
--- | Node subtype (e.g. subst, nadj, whatever they mean...)
+-- | Node subtype (e.g. subst).  Not handled in any special way.
 type SubType = T.Text
 
 
@@ -302,6 +304,7 @@ parseTyp x = case x of
     "lex"       -> Lex
     "anchor"    -> Anchor
     "foot"      -> Foot
+    "nadj"      -> NAdj
     _           -> Other (L.toStrict x)
 
 

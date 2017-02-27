@@ -14,6 +14,8 @@ module NLP.Partage4Xmg.Ensemble
 -- ** FS-related
 , Key
 , Val
+, CFS
+, OFS
 , FSTree
 
 -- * Grammar
@@ -49,8 +51,9 @@ import qualified Pipes.Prelude              as P
 
 import qualified NLP.Partage.Tree.Other     as O
 import qualified NLP.Partage.FS             as FS
-import qualified NLP.Partage.FSTree         as FSTree
-import qualified NLP.Partage.FSTree2        as FSTree2
+-- import qualified NLP.Partage.FSTree         as FSTree
+import qualified NLP.Partage.FSTree2        as FST
+import           NLP.Partage.FSTree2        (Loc(..))
 import qualified NLP.Partage.Env            as Env
 import qualified NLP.Partage.Earley.Comp    as C
 
@@ -94,15 +97,23 @@ type Tree t = R.Tree (Node t)
 
 
 -- | FS key.
-type Key = G.Feat
+type Key = G.Attr
 
 
 -- | FS value.
 type Val = T.Text
 
 
+-- | Closed FS.
+type OFS k = FST.OFS k
+
+
+-- | Closed FS.
+type CFS k v = FST.CFS k v
+
+
 -- | FS-aware tree.
-type FSTree t k = FSTree.FSTree NonTerm t k
+type FSTree t k = FST.OFSTree NonTerm t k
 
 
 --------------------------------------------------
@@ -220,14 +231,14 @@ getTrees gram term ana
 
 
 -- | Convert and close the given XMG AVM.
-closeAVM :: G.AVM -> FS.CFS Key Val
+closeAVM :: G.AVM -> CFS Key Val
 closeAVM avm = maybe M.empty id . fst . Env.runEnvM $ do
   fs <- withVarMap $ convertAVM avm
   FS.close fs
 
 
 -- | Convert an XMG-style AVM to a FS.
-convertAVM :: G.AVM -> E.StateT VarMap (Env.EnvM Val) (FS.OFS Key)
+convertAVM :: G.AVM -> E.StateT VarMap (Env.EnvM Val) (OFS Key)
 convertAVM avm = fmap M.fromList . runListT $ do
   (key, valVar) <- each avm
   case valVar of
@@ -270,7 +281,12 @@ withVarMap = flip E.evalStateT M.empty
 -- | Remove information about the past anchors.  Fail if there
 -- are some anchors left.
 simplify :: FSTree ATerm k -> FSTree Term k
-simplify = fmap $ first simplifyNode
+simplify =
+  fmap onNode
+  where
+    onNode node =
+      let treeNode = simplifyNode (FST.treeNode node)
+      in  node {FST.treeNode = treeNode}
 
 
 -- | Convert the parsed tree to the required form.
@@ -279,35 +295,32 @@ convert
   -> E.StateT VarMap (Env.EnvM Val) (FSTree ATerm Key)
 convert (R.Node G.NonTerm{..} xs) =
   case typ of
-    G.Std -> below $ O.NonTerm sym
+    G.Std -> belowAA $ O.NonTerm sym
+    G.NAdj -> belowNA $ O.NonTerm sym
     G.Foot -> leaf $ O.Foot sym
     G.Anchor -> leaf . O.Term $ Anchor sym
---       -- fs <- mkFS
---       fs <- convertAVM avm
---       theLeaf <- leaf . O.Term $ Anchor sym
---       return $ R.Node (O.NonTerm sym, fs) [theLeaf]
     G.Lex -> leaf . O.Term $ Term sym
-    G.Other _ -> below $ O.NonTerm sym
+    G.Other _ -> belowAA $ O.NonTerm sym
   where
---     -- TODO: provisional solution, top and bot should be distinguished
---     avm = maybe M.empty id (top <|> bot)
-    below x = do
+    -- with null adjoining
+    belowNA = below True
+    -- with allowed adjoining
+    belowAA = below False
+    below nullAdj x = do
       -- fs <- mkFS
       fs <- convertAVM avm
-      R.Node (x, fs) <$> mapM convert xs
+      let node = FST.Node
+            { treeNode = x
+            , featStr = fs
+            , nullAdj = nullAdj }
+      R.Node node <$> mapM convert xs
     leaf x = do
-      -- fs <- mkFS
       fs <- convertAVM avm
-      return $ R.Node (x, fs) []
---     mkFS = do
---       let topList = maybe [] (M.toList top)
---           botList = maybe [] (M.toList bot)
--- --       topFS <- convertAVM $ map (first FSTree.Top) topList
--- --       botFS <- convertAVM $ map (first FSTree.Bot) botList
---       convertAVM $
---         map (first FSTree.Top) topList ++
---         map (first FSTree.Bot) botList
--- --       -- FS.unify topFS botFS -- not really unification
+      let node = FST.Node
+            { treeNode = x
+            , featStr = fs
+            , nullAdj = False }
+      return $ R.Node node []
 
 
 -- | Anchor the given tree with the given terminal and its accompanying FS.
@@ -316,13 +329,13 @@ anchor
   => Term                -- ^ Terminal used to replace the anchor
   -> Lex.Word            -- ^ The corresponding word interpretation (containing
                          --   relevant part-of-speech information)
-  -> FS.CFS key Val      -- ^ The accompanying FS
+  -> CFS key Val         -- ^ The accompanying FS
   -> FSTree ATerm key    -- ^ `FSTree` with an anchor
   -> Env.EnvM Val (FSTree ATerm key)
 anchor anc wordInterp newFS =
   go
   where
-    go (R.Node label@(typ, oldFS) xs) = case typ of
+    go (R.Node label@FST.Node{..} xs) = case treeNode of
       O.NonTerm _ -> R.Node label <$> mapM go xs
       O.Foot _ -> return $ R.Node label []
       O.Term t -> case t of
@@ -330,21 +343,28 @@ anchor anc wordInterp newFS =
         Anchor sym -> do
           guard $ sym == Lex.cat wordInterp
           newFS' <- FS.reopen newFS
-          fs <- FS.unifyFS oldFS newFS'
+          fs <- FS.unifyFS featStr newFS'
     --       env <- E.get
     --       trace (show newFS) $ trace (show oldFS) $
     --         trace (show newFS') $ trace (show fs) $ trace (show env) $
-          let leaf = R.Node (O.Term (Term anc), M.empty) []
-          return $ R.Node (O.NonTerm sym, fs) [leaf]
+          let leaf = FST.Node
+                { treeNode = O.Term (Term anc)
+                , featStr = M.empty
+                , nullAdj = False }
+              node = FST.Node
+                { treeNode = O.NonTerm sym
+                , featStr = fs
+                , nullAdj = False }
+          return $ R.Node node [R.Node leaf []]
 
 
 -- | Extract the tree embedded in the environment and the accompanying computation.
 splitTree
   :: Env.EnvM Val (FSTree Term Key)
-  -> Maybe (Tree Term, C.Comp (FS.CFS Key Val))
+  -> Maybe (Tree Term, C.Comp (CFS Key Val))
 splitTree source = do
-  let comp = FSTree2.compile source
-  tree <- fmap fst <$> FSTree.extract source
+  let comp = FST.compile source
+  tree <- fmap FST.treeNode <$> FST.extract source
   return (tree, comp)
 
 

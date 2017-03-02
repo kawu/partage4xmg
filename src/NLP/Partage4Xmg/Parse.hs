@@ -94,6 +94,13 @@ mkAuto =
 
 
 -- | Retieve the set of ETs for the given grammar and the given terminal.
+--
+-- NOTE: it is important to remark that we can theoretically cat several tree
+-- computations assigned to one and the same tree ID. For instance, two
+-- morphology entries can exist with different FS values but referring to one
+-- and the same tree family (via the same lexicon entry).
+--
+-- This is why the result cannot be a map from tree IDs to tree computations.
 gramOn
   :: Ens.Grammar
   -- ^ The TAG grammar
@@ -140,10 +147,14 @@ parseWith gram sent = do
         (tree', _comp) <- compile treeID tree
         return (tree', treeID)
       elemTrees
-        -- we abstract over identical trees with different computations
-        = M.toList . M.fromList
+        = M.toList
+        -- we keep IDs of the identical trees
+        . M.fromListWith (\x y -> T.concat [x, ",", y])
         . mapMaybe compileIt
         . concatMap (gramOn gram)
+        -- the line below is important because if we have two identical words in
+        -- the sentence then we would get spurious derivations without it
+        . S.toList . S.fromList
         $ sent
       auto = mkAuto elemTrees
       input = map (S.singleton . (, M.empty :: CFS Key Val)) sent
@@ -162,6 +173,9 @@ parseWithFS gram sent = do
         -- = M.fromList <- this was WRONG
         = mapMaybe (uncurry compile)
         . concatMap (gramOn gram)
+        -- the line below is important because if we have two identical words in
+        -- the sentence then we would get spurious derivations without it
+        . S.toList . S.fromList
         $ sent
       auto = mkAutoFS elemTrees -- (M.toList elemTrees)
       input = [S.singleton (x, M.empty) | x <- sent]

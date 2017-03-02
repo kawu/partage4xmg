@@ -126,9 +126,12 @@ lemmaRefQ = do
 avmQ :: Q G.AVM
 avmQ = joinR
   (named "fs")
-  (concatMap mkFeat <$> every' G.attrValQ)
-  where
-    mkFeat (x, v) = (,v) <$> [Top x, Bot x]
+  (every' G.attrValQ)
+--   (concatMap mkFeat <$> every' G.attrValQ)
+--   where
+--     -- feature in the morphology file refer only to top
+--     mkFeat (x, v) = (,v) <$> [Top x]
+--     -- mkFeat (x, v) = (,v) <$> [Top x, Bot x]
 
 
 -- -- | An attribute/value parser.
@@ -232,11 +235,14 @@ parseAvm x =
 -- | AVM attoparsec.
 avmA :: A.Parser G.AVM
 avmA = do
-  xs <- between "[" "]" $ many (attrValA <* optional (A.char ';'))
-  return $ concatMap mkFeat xs
+  between "[" "]" $ many (attrValA <* optional (A.char ';'))
+  -- xs <- between "[" "]" $ many (attrValA <* optional (A.char ';'))
+  -- return $ concatMap mkFeat xs
   where
     between p q x = p *> x <* q
-    mkFeat (x, v) = (,v) <$> [Top x, Bot x]
+--     -- feature in the morphology file refer only to top
+--     mkFeat (x, v) = (,v) <$> [Top x]
+--     -- mkFeat (x, v) = (,v) <$> [Top x, Bot x]
 
 
 attrValA :: A.Parser (G.Attr, Either G.Val G.Var)

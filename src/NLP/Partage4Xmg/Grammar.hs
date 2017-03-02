@@ -11,16 +11,17 @@ module NLP.Partage4Xmg.Grammar
 -- * Types
   Family
 , Tree
+, TreeID
 , NonTerm (..)
 , Type (..)
 , SubType
 , AVM
--- , AVM2 (..)
+, XAVM (..)
 -- , topOnly
 -- , botOnly
 , Sym
 , Attr
-, Feat
+-- , Feat
 , Val
 , Var
 
@@ -88,8 +89,8 @@ type Sym = T.Text
 type Attr = T.Text
 
 
--- | Feature (simple, top or bottom)
-type Feat = Loc Attr
+-- -- | Feature (simple, top or bottom)
+-- type Feat = Loc Attr
 
 
 -- | Attribute value.
@@ -103,7 +104,7 @@ type Var = T.Text
 -- | Attribute-value matrix. We are using a list and not e.g. a map on purpose,
 -- so that it is possible to define a single feature with different values and
 -- variables (something which might happen in practice).
-type AVM = [(Feat, Either Val Var)]
+type AVM = [(Attr, Either Val Var)]
 
 
 -- | Non-terminal/node type.
@@ -125,20 +126,23 @@ type SubType = T.Text
 -- | Non-terminal or terminal.
 -- TODO: change the name.
 data NonTerm = NonTerm
-    { typ   :: Type
-    , sym   :: Sym
-    , avm   :: AVM }
+    { typ :: Type
+    , sym :: Sym
+    , avm :: XAVM }
     deriving (Show, Eq, Ord)
 
 
--- data AVM2 = AVM2
---   { top :: Maybe AVM
---     -- ^ The top AVM
---   , bot :: Maybe AVM
---     -- ^ The bottom AVM
---   } deriving (Show, Eq, Ord)
---
---
+-- | Mixed AVM.
+data XAVM = XAVM
+  { reg :: AVM
+    -- ^ Regular features
+  , top :: Maybe AVM
+    -- ^ The top AVM
+  , bot :: Maybe AVM
+    -- ^ The bottom AVM
+  } deriving (Show, Eq, Ord)
+
+
 -- -- | Create a complex AVM with the top part only.
 -- topOnly :: AVM -> AVM2
 -- topOnly avm = AVM2 {top = Just avm, bot = Nothing}
@@ -155,6 +159,10 @@ type Tree = R.Tree NonTerm
 
 -- | Name of a tree family.
 type Family = T.Text
+
+
+-- | Tree identifier.
+type TreeID = T.Text
 
 
 -------------------------------------------------
@@ -193,21 +201,21 @@ type Family = T.Text
 
 
 -- | Grammar parser (as a parser).
-grammarP :: P [(Family, Tree)]
+grammarP :: P [(Family, TreeID, Tree)]
 grammarP = concat <$> every' grammarQ
 
 
 -- | Grammar parser.
-grammarQ :: Q [(Family, Tree)]
+grammarQ :: Q [(Family, TreeID, Tree)]
 grammarQ = concat <$> (true //> entryQ)
 
 
 -- | Entry parser (family + one or more trees).
-entryQ :: Q [(Family, Tree)]
+entryQ :: Q [(Family, TreeID, Tree)]
 entryQ = named "entry" `joinR` do
     famName <- first familyQ
     trees <- every' treeQ
-    return [(famName, t) | t <- trees]
+    return [(famName, treeID, tree) | (treeID, tree) <- trees]
 
 
 -- | Tree parser.
@@ -216,8 +224,9 @@ familyQ = fmap L.toStrict $ named "family" `joinR` first (node name)
 
 
 -- | Tree parser.
-treeQ :: Q Tree
-treeQ = named "tree" `joinR` first nodeQ
+treeQ :: Q (TreeID, Tree)
+treeQ = (named "tree" *> attr "id") `join`
+  (\tid -> (L.toStrict tid,) <$> first nodeQ)
 
 
 -- | Node parser.
@@ -256,16 +265,20 @@ _avmP = every attrValQ
 
 
 -- | AVM parser.
-avmP :: P AVM
+avmP :: P XAVM
 avmP = do
   top' <- optional $ first $ avmQ "top"
   bot' <- optional $ first $ avmQ "bot"
-  sim' <- _avmP
-  return $
-    [ (Top x, v) | (x, v) <- maybe [] id top' ] ++
-    [ (Bot x, v) | (x, v) <- maybe [] id bot' ] ++
-    concat [ (,v) <$> [Top x, Bot x]
-           | (x, v) <- sim' ]
+  reg' <- _avmP
+  return $ XAVM
+    { reg = reg'
+    , top = top'
+    , bot = bot' }
+--   return $
+--     [ (Top x, v) | (x, v) <- maybe [] id top' ] ++
+--     [ (Bot x, v) | (x, v) <- maybe [] id bot' ] ++
+--     concat [ (,v) <$> [Top x, Bot x]
+--            | (x, v) <- sim' ]
 
 
 -- | An attribute/value parser.
@@ -317,21 +330,23 @@ parseTyp x = case x of
 -- | Parse textual contents of the French TAG XML file.
 parseGrammar
   :: L.Text
-  -> M.Map Family (S.Set Tree)
+  -> M.Map Family (M.Map Tree TreeID)
 parseGrammar txt =
-  flip E.execState M.empty $ E.forM_ ts $ \(family, tree) -> do
-    length (show tree) `seq`
-      E.modify' (M.insertWith S.union family
-                 (S.singleton tree))
-  where
-    ts = F.concat . evalP grammarP . parseForest . TagSoup.parseTags $ txt
+  flip E.execState M.empty $
+  E.forM_ ts $
+  \(family, treeID, tree) ->
+    do length (show tree) + length (show treeID) `seq`
+         E.modify' (M.insertWith M.union
+                                 family
+                                 (M.singleton tree treeID))
+  where ts = F.concat . evalP grammarP . parseForest . TagSoup.parseTags $ txt
 
 
 -- | Parse the stand-alone French TAG xml file.
 -- readGrammar :: FilePath -> IO [(Family, Tree)]
 readGrammar
   :: FilePath
-  -> IO (M.Map Family (S.Set Tree))
+  -> IO (M.Map Family (M.Map Tree TreeID))
 readGrammar path = parseGrammar <$> L.readFile path
 
 
@@ -341,7 +356,9 @@ printGrammar
 printGrammar =
   let printTree (famName, ts) = do
         putStrLn $ "### " ++ show famName ++ " ###"
-        E.forM_ ts $ putStrLn . R.drawTree . fmap show
+        E.forM_ (M.toList ts) $ \(tree, treeID) -> do
+          putStrLn $ "@@@ " ++ show treeID ++ " @@@"
+          putStrLn . R.drawTree . fmap show $ tree
   in  mapM_ printTree . M.toList <=< readGrammar
 
 

@@ -61,6 +61,8 @@ import qualified NLP.Partage4Xmg.Lexicon    as Lex
 import qualified NLP.Partage4Xmg.Morph      as Morph
 import qualified NLP.Partage4Xmg.Grammar    as G
 
+-- import Debug.Trace (trace)
+
 
 --------------------------------------------------
 -- Types
@@ -125,7 +127,7 @@ type FSTree t k = FST.OFSTree NonTerm t k
 data Grammar = Grammar
   { morphMap :: M.Map T.Text (S.Set Morph.Ana)
   , lexMap   :: M.Map Lex.Word (S.Set G.Family)
-  , treeMap  :: M.Map G.Family (S.Set G.Tree)
+  , treeMap  :: M.Map G.Family (M.Map G.Tree C.TreeID)
   }
 
 
@@ -150,13 +152,13 @@ getInterps Grammar{..} orth =
 
 
 -- | Retrieve the set of grammar trees related to te given interpretation.
-_getTrees :: Grammar -> Morph.Ana -> S.Set G.Tree
-_getTrees Grammar{..} ana = S.unions
-  [ treeSet
+_getTrees :: Grammar -> Morph.Ana -> M.Map G.Tree G.TreeID
+_getTrees Grammar{..} ana = M.unions
+  [ treeMap
   | famSet <- maybeToList $ M.lookup (Morph.word ana) lexMap
   , family <- S.toList famSet
   -- , treeSet <- trace (show family) $ maybeToList $ M.lookup family treeMap
-  , treeSet <- maybeToList $ M.lookup family treeMap
+  , treeMap <- maybeToList $ M.lookup family treeMap
   ]
 
 
@@ -215,30 +217,36 @@ getTrees
   -> Morph.Ana
      -- ^ The analysis corresponding the wordform
   -- -> [(Tree Term, C.Comp CFS)]
-  -> [Env.EnvM Val (FSTree Term Key)]
+  -> [(C.TreeID, Env.EnvM Val (FSTree Term Key))]
 getTrees gram term ana
   -- = mapMaybe process
   = map process
-  . S.toList
+  . M.toList
   $ _getTrees gram ana
   where
+
     -- process tree = splitFSTree . fmap simplifyFS $ do
-    process tree = fmap simplify $ do
+    process (tree, treeID) = (treeID,) . fmap simplify $ do
       -- let term = Morph.lemma ana
       converted <- withVarMap (convert tree)
-      let fs = closeAVM $ Morph.avm ana
+      let fs = closeAVM $ G.XAVM
+               { G.bot = Just (Morph.avm ana)
+               , G.top = Nothing
+               , G.reg = [] }
       anchor term (Morph.word ana) fs converted
 
+    -- convert and close the given XMG AVM.
+    closeAVM :: G.XAVM -> CFS Key Val
+    closeAVM avm = maybe M.empty id . fst . Env.runEnvM $ do
+      fs <- withVarMap $ convertXAVM Leaf avm
+      FS.close fs
 
--- | Convert and close the given XMG AVM.
-closeAVM :: G.AVM -> CFS Key Val
-closeAVM avm = maybe M.empty id . fst . Env.runEnvM $ do
-  fs <- withVarMap $ convertAVM avm
-  FS.close fs
 
-
--- | Convert an XMG-style AVM to a FS.
-convertAVM :: G.AVM -> E.StateT VarMap (Env.EnvM Val) (OFS Key)
+-- -- | Convert an XMG-style AVM to a FS.
+-- convertAVM :: G.AVM -> E.StateT VarMap (Env.EnvM Val) (OFS Key)
+convertAVM
+  :: [(Loc G.Attr, Either G.Val G.Var)]
+  -> E.StateT VarMap (Env.EnvM Val) (OFS Key)
 convertAVM avm = fmap M.fromList . runListT $ do
   (key, valVar) <- each avm
   case valVar of
@@ -249,6 +257,42 @@ convertAVM avm = fmap M.fromList . runListT $ do
     Right var0 -> do
       var <- P.lift $ varFor var0
       return (key, var)
+
+
+-- | To control behavior of `G.XAVM` convertion.
+data ConvCfg
+  = Node -- ^ Conversion concerns an internal tree node
+  | Leaf -- ^ Conversion concerns an tree leaf
+
+
+-- | Convert an XMG-style AVM to a FS. Depends on the type of the node. Namely,
+-- in case of leaves, regular (neither top nor bottom) features are treated as
+-- though they were defined as bottom only. Otherwise, they are defined as
+-- though they were defined as both top and bottom.
+convertXAVM :: ConvCfg -> G.XAVM -> E.StateT VarMap (Env.EnvM Val) (OFS Key)
+convertXAVM Node xavm = do
+  -- construct top/bottom part
+  let top = maybe [] (map (first Top)) (G.top xavm)
+      bot = maybe [] (map (first Bot)) (G.bot xavm)
+  topBot <- convertAVM $ top ++ bot
+  -- process regular features
+  let regTop = map (first Top) (G.reg xavm)
+      regBot = map (first Bot) (G.reg xavm)
+  reg0 <- convertAVM (regTop ++ regBot)
+  reg <- P.lift $ FST.unifyTopBot reg0
+  -- join the two
+  fs <- P.lift $ FS.unifyFS topBot reg
+  return fs
+convertXAVM Leaf xavm = do
+  -- construct top/bottom part
+  let top = maybe [] (map (first Top)) (G.top xavm)
+  -- note: bottom should actually not be defined, right?
+      bot = maybe [] (map (first Bot)) (G.bot xavm)
+  -- regular features are treated as top only in case of Leaf
+      regTop = map (first Top) (G.reg xavm)
+  -- join together all this and convert
+  fs <- convertAVM $ top ++ regTop ++ bot
+  return fs
 
 
 -- | Retrieve the corresponding environment variable. Create a new one if the
@@ -307,15 +351,15 @@ convert (R.Node G.NonTerm{..} xs) =
     -- with allowed adjoining
     belowAA = below False
     below nullAdj x = do
-      -- fs <- mkFS
-      fs <- convertAVM avm
+      let convCfg = if null xs then Leaf else Node
+      fs <- convertXAVM convCfg avm
       let node = FST.Node
             { treeNode = x
             , featStr = fs
             , nullAdj = nullAdj }
       R.Node node <$> mapM convert xs
     leaf x = do
-      fs <- convertAVM avm
+      fs <- convertXAVM Leaf avm
       let node = FST.Node
             { treeNode = x
             , featStr = fs
@@ -344,9 +388,7 @@ anchor anc wordInterp newFS =
           guard $ sym == Lex.cat wordInterp
           newFS' <- FS.reopen newFS
           fs <- FS.unifyFS featStr newFS'
-    --       env <- E.get
-    --       trace (show newFS) $ trace (show oldFS) $
-    --         trace (show newFS') $ trace (show fs) $ trace (show env) $
+          -- let fs = featStr
           let leaf = FST.Node
                 { treeNode = O.Term (Term anc)
                 , featStr = M.empty
@@ -360,10 +402,11 @@ anchor anc wordInterp newFS =
 
 -- | Extract the tree embedded in the environment and the accompanying computation.
 splitTree
-  :: Env.EnvM Val (FSTree Term Key)
+  :: C.TreeID -- ^ The corresponding elementary tree ID
+  -> Env.EnvM Val (FSTree Term Key)
   -> Maybe (Tree Term, C.Comp (CFS Key Val))
-splitTree source = do
-  let comp = FST.compile source
+splitTree treeID source = do
+  let comp = FST.compile treeID source
   tree <- fmap FST.treeNode <$> FST.extract source
   return (tree, comp)
 

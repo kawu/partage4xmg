@@ -16,6 +16,7 @@ module NLP.Partage4Xmg.Parse
 
 import           Control.Monad              (forM_, unless, when)
 import           Control.Monad.Trans.Maybe
+import qualified Control.Arrow              as Arr
 
 import           Data.List                  (intercalate)
 import           Data.Maybe                 (maybeToList, mapMaybe)
@@ -86,10 +87,10 @@ mkAutoFS gram =
 
 
 -- | Create an automaton from a list of lexicalized elementary trees.
-mkAuto :: [Tree Term] -> Earley.Auto NonTerm Term (CFS key Val)
+mkAuto :: [(Tree Term, C.TreeID)] -> Earley.Auto NonTerm Term (CFS key Val)
 mkAuto =
-  let dummy = C.Comp (const [M.empty]) C.dummyTopDown
-  in  mkAutoFS . map (,dummy)
+  let mkDummy = C.Comp (const [M.empty]) . C.dummyTopDown
+  in  mkAutoFS . map (Arr.second mkDummy)
 
 
 -- | Retieve the set of ETs for the given grammar and the given terminal.
@@ -99,7 +100,7 @@ gramOn
   -> Term
   -- ^ The terminal
   -- -> M.Map (Tree Term) (C.Comp CFS)
-  -> [Env.EnvM Val (FSTree Term Key)]
+  -> [(C.TreeID, Env.EnvM Val (FSTree Term Key))]
 gramOn gram word =
   -- trace (show interpSet) $ elemTrees
   elemTrees
@@ -113,7 +114,8 @@ gramOn gram word =
 -- | Compile the given tree into a grammar tree and the corresponding
 -- computation.
 compile
-  :: Env.EnvM Val (FSTree Term Key)
+  :: C.TreeID
+  -> Env.EnvM Val (FSTree Term Key)
   -> Maybe (Tree Term, C.Comp (CFS Key Val))
 compile = Ens.splitTree
 
@@ -134,10 +136,13 @@ parseWith
   -- ^ The sentence to parse
   -> IO (Earley.Hype NonTerm Term (CFS Key Val))
 parseWith gram sent = do
-  let elemTrees
-        = S.toList . S.fromList
-        . map fst
-        . mapMaybe compile
+  let compileIt (treeID, tree) = do
+        (tree', _comp) <- compile treeID tree
+        return (tree', treeID)
+      elemTrees
+        -- we abstract over identical trees with different computations
+        = M.toList . M.fromList
+        . mapMaybe compileIt
         . concatMap (gramOn gram)
         $ sent
       auto = mkAuto elemTrees
@@ -155,7 +160,7 @@ parseWithFS
 parseWithFS gram sent = do
   let elemTrees
         -- = M.fromList <- this was WRONG
-        = mapMaybe compile
+        = mapMaybe (uncurry compile)
         . concatMap (gramOn gram)
         $ sent
       auto = mkAutoFS elemTrees -- (M.toList elemTrees)
@@ -190,9 +195,13 @@ printETs gramCfg = do
     forM_ input $ \word -> do
       putStrLn $ "<<WORD: " ++ T.unpack word ++ ">>"
       putStrLn ""
-      let elemTrees = mapMaybe extract $ gramOn gram word
-      forM_ elemTrees $
-        putStrLn . R.drawTree . fmap showNode
+      let extractSecond (treeID, tree) = do
+            tree' <- extract tree
+            return (treeID, tree')
+      let elemTrees = mapMaybe extractSecond $ gramOn gram word
+      forM_ elemTrees $ \(treeID, tree) -> do
+        putStrLn $ "### " ++ T.unpack treeID
+        putStrLn . R.drawTree . fmap showNode $ tree
       -- putStrLn ""
   where
     -- showNode (node, avm) =
@@ -224,9 +233,13 @@ parseAll ParseCfg{..} gramCfg = do
       let parseSet () = Deriv.derivTrees hype begSym (length input)
       forM_ (take printParsed $ parseSet ()) $ \t0 -> do
         let showPrintNode = Deriv.showPrintNode showPair
-            showPair (node, mayAvm) =
-              O.showNode T.unpack showTok node ++ " " ++
-              showCFS (maybe M.empty id mayAvm)
+            -- showPair (node, mayAvm) =
+            showPair node =
+              O.showNode T.unpack showTok (Deriv.node node) ++ " " ++
+              showCFS (maybe M.empty id (Deriv.value node)) ++
+              case Deriv.treeID node of
+                Nothing -> ""
+                Just treeID -> " <" ++ T.unpack treeID ++ ">"
             showTok Tok{..} = show position ++ " " ++ T.unpack terminal
         -- let t = fmap (fmap $ showCFS) t0
         putStrLn . R.drawTree . fmap showPrintNode . Deriv.deriv4show $ t0

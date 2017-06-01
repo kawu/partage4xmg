@@ -23,7 +23,7 @@ Under linux, you can use the following sequence of commands to set up ParTAGe4XM
     mkdir partage-src
     cd partage-src
     git clone -b simple https://github.com/kawu/partage.git
-    git clone -b simple https://github.com/kawu/partage4xmg.git
+    git clone https://github.com/kawu/partage4xmg.git
     cd partage4xmg
     stack install
 

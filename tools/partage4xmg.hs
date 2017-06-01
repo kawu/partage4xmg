@@ -2,7 +2,7 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 
 
--- import           Data.Monoid (mempty)
+import           Data.Monoid ((<>))
 import           Options.Applicative
 import qualified Data.Char as C
 

@@ -30,7 +30,7 @@ library
       , dawg-ord            >= 0.5      && < 0.6
       , mtl                 >= 2.1      && < 2.3
       , transformers        >= 0.3      && < 0.6
-      , pipes               >= 4.1      && < 4.3
+      , pipes               >= 4.1      && < 4.4
       , random              >= 1.0      && < 2.0
       , hashable            >= 1.2      && < 1.3
       , data-memocombinators    >= 0.5  && < 0.6
@@ -61,7 +61,7 @@ executable partage4xmg
     build-depends:
         partage4xmg
       , base                    >= 4        && < 5
-      , optparse-applicative    >= 0.12     && < 0.13
+      , optparse-applicative    >= 0.12     && < 0.14
     hs-source-dirs: tools
     main-is: partage4xmg.hs
     ghc-options: -Wall -O2 -threaded -rtsopts

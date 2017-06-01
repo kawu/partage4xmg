@@ -1,5 +1,5 @@
 name:               partage4xmg
-version:            0.2
+version:            1.0.0.0
 synopsis:           Partage-based parsing for XMG grammars
 description:
     The package provides a command-line tool for parsing with grammars
@@ -22,7 +22,7 @@ library
     hs-source-dirs: src
     build-depends:
         base                >= 4        && < 5
-      , partage             >= 0.3      && < 0.4
+      , partage             >= 1.0      && < 1.1
       , polysoup            >= 0.6      && < 0.7
       , tagsoup             >= 0.13     && < 0.15
       , containers          >= 0.4      && < 0.6

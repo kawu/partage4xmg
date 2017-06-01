@@ -20,8 +20,8 @@ you will need to `git clone` both the [partage][partage] repository and the
 current repository to your local directories and then run `stack install` in the
 local version of the current repository. The entire process can look like this:
 
-    git clone https://github.com/kawu/partage/tree/0.1
-    git clone https://github.com/kawu/partage4xmg/tree/0.1
+    git clone -b 0.1 https://github.com/kawu/partage.git
+    git clone -b 0.1 https://github.com/kawu/partage4xmg.git
     cd partage4xmg
     stack install
 

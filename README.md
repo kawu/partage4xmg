@@ -83,10 +83,8 @@ To enable support for feature structures (FSs), use the `-u` (`--use-features`)
 option. Note that at the moment the parser reports FSs only for derivations and
 not for derived trees.
 
-By default, the parser assumes that there is no distinction between the *top*
-and the *bottom* FSs, i.e., that there is only one FS per elementary tree node.
-You can enable the (**experimental**!) support for the *top*/*bottom*
-distinction by using the `-t` (`--topbot`) option.
+Note that currently the parser provides support for *flat* FSs only (with the
+*top*/*bottom* distinction).
 
 
 ### Tokenization

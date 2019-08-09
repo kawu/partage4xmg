@@ -14,8 +14,8 @@ It is recommanded to install *ParTAGe4XMG* using the
 machine beforehand.
 Then:
 * Create an empty directory, which will be dedicated for the ParTAGe source code,
-* Clone the `simple` branch of the [ParTAGe][partage] repository into this empty directory,
-* Clone the `simple` branch of [this][this] repository into the same directory,
+* Clone the `xmg` branch of the [ParTAGe][partage] repository into this empty directory,
+* Clone the `xmg` branch of [this][this] repository into the same directory,
 * Run `stack install` in the local copy of the `partage4xmg` repository.
 
 Under linux, you can use the following sequence of commands to set up ParTAGe4XMG:
